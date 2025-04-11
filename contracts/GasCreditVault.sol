@@ -148,7 +148,7 @@ contract GasCreditVault is Ownable {
     }
 
     // Consumption function ====================================
-    function consume(uint256 usdValue) external onlyRelayer returns (uint256 creditCost) {
+    function consume(address user, uint256 usdValue) external onlyRelayer returns (uint256 creditCost) {
         require(usdValue > 0, "Value must be > 0");
 
         creditCost = usdValue * (10 ** creditDecimals);
@@ -158,7 +158,7 @@ contract GasCreditVault is Ownable {
             creditCost = minimumConsume;
         }
 
-        require(credits[msg.sender] >= creditCost, "Insufficient credits");
+        require(credits[user] >= creditCost, "Insufficient credits");
 
         uint256 remaining = creditCost;
 
