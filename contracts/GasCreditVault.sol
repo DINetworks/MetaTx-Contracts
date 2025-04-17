@@ -17,9 +17,10 @@ contract GasCreditVault is Ownable {
         bool isStablecoin;
     }
 
-    struct UserBalance {
-        uint256 deposited;
-        uint256 credited;
+    struct UserCredits {
+        uint256 totalCredit;
+        uint256 withdrawableCredit;
+        mapping(address => uint256) creditInToken;
     }
 
     // Events
@@ -27,26 +28,30 @@ contract GasCreditVault is Ownable {
     event TokenRemoved(address indexed token);
     event Deposited(address indexed user, address indexed token, uint256 amount, uint256 credited);
     event Withdrawn(address indexed user, address indexed token, uint256 amount, uint256 credited);
-    event CreditsAdded(address indexed user, uint256 amount);
-    event CreditsUsed(address indexed user, uint256 amount);
     event CreditsConsumed(address indexed user, uint256 usdValue, uint256 creditCost);
     event OwnerWithdrawn(address indexed token, uint256 amount, uint256 creditedConsumed);
     event RelayerAdded(address indexed relayer);
     event RelayerRemoved(address indexed relayer);
+    event EmergencyWithdrawn(address indexed to, uint256 amount);
+    event Paused();
+    event Unpaused();
 
     EnumerableSet.AddressSet private whitelistedTokens;
     EnumerableSet.AddressSet private relayers;
 
     mapping(address => TokenInfo) public tokenInfo;
-    mapping(address => mapping(address => UserBalance)) public balances;
     mapping(address => uint256) public credits;
+    mapping(address => uint256) public withdrawableCredits;
+    mapping(address => mapping(address => uint256)) public creditsInToken;
     mapping(address => uint256) public totalConsumed;
-    uint256 public totalCreditsWithdrawnByOwner;
+    
+    uint256 public totalConsumedCreditsWithdrawn;
+    uint256 public totalConsumedCredits;
 
-    uint256 public totalCreditsConsumed;
-    uint256 public minimumConsume;
-
+    uint256 public minimumConsume = 5 * 10 ** 17;
     uint8 public constant creditDecimals = 18;
+
+    bool public paused;
 
     constructor(address initialOwner) Ownable(initialOwner) {}
 
@@ -56,6 +61,20 @@ contract GasCreditVault is Ownable {
         _;
     }
 
+    modifier onlyStablecoin(address token) {
+        require(tokenInfo[token].isStablecoin, "Token not stablecoin");
+        _;
+    }
+
+    modifier whenNotPaused() {
+        require(!paused, "Paused");
+        _;
+    }
+
+    modifier whenPaused() {
+        require(paused, "Unpaused");
+        _;
+    }
     // Owner functions ==============================================
 
     // Function to add a whitelisted relayer
@@ -98,10 +117,39 @@ contract GasCreditVault is Ownable {
     }
 
     function removeToken(address token) external onlyOwner {
+        require(IERC20(token).balanceOf(address(this)) == 0, "None Zero Balance");
         require(whitelistedTokens.contains(token), "Token not whitelisted");
         whitelistedTokens.remove(token);
         delete tokenInfo[token];
         emit TokenRemoved(token);
+    }
+
+    // Emergency functions - pause/unpause protocol
+    function pause() external onlyOwner {
+        require(!paused, "Already paused");
+        paused = true;
+        emit Paused();
+    }
+
+    function unpause() external onlyOwner {
+        require(paused, "Not paused");
+        paused = false;
+        emit Unpaused();
+    }
+
+    function _emergencyWithdraw(address token) internal {
+        uint256 balance = IERC20(token).balanceOf(address(this));
+        IERC20(token).safeTransfer(owner(), balance);
+
+        emit EmergencyWithdrawn(token, balance);
+    }
+
+    function emergencyWithdraw() external onlyOwner whenPaused {
+        address[] memory tokens = whitelistedTokens.values();
+        for (uint256 i = 0; i < tokens.length; i++) {
+            address token = tokens[i];
+            _emergencyWithdraw(token);
+        }
     }
 
     function setMinimumConsume(uint256 _minimum) external onlyOwner {
@@ -111,47 +159,47 @@ contract GasCreditVault is Ownable {
 
     // User functions ==============================================
 
-    function deposit(address token, uint256 amount) external {
+    function deposit(address token, uint256 amount) external whenNotPaused {
         require(whitelistedTokens.contains(token), "Token not whitelisted");
         require(amount > 0, "Amount must be > 0");
 
         IERC20(token).safeTransferFrom(msg.sender, address(this), amount);
 
         uint256 creditedAmount = calculateCreditValue(token, amount);
-        
-        balances[msg.sender][token].deposited += amount;
-        balances[msg.sender][token].credited += creditedAmount;
+
         credits[msg.sender] += creditedAmount;
+        creditsInToken[msg.sender][token] += creditedAmount;
+        if (tokenInfo[token].isStablecoin)
+            withdrawableCredits[msg.sender] += creditedAmount;
 
         emit Deposited(msg.sender, token, amount, creditedAmount);
-        emit CreditsAdded(msg.sender, creditedAmount);
     }
 
-    function withdraw(address token, uint256 creditAmount) external {
+    function withdraw(address token, uint256 creditAmount) external onlyStablecoin(token) whenNotPaused {
         require(whitelistedTokens.contains(token), "Token not whitelisted");
         require(creditAmount > 0, "Amount must be > 0");
         require(credits[msg.sender] >= creditAmount, "Insufficient credits");
+        require(creditsInToken[msg.sender][token] >= creditAmount, "Insufficient token balance");
 
-        // Calculate token amount based on current price
         uint256 tokenAmount = calculateTokenValue(token, creditAmount);
-        require(balances[msg.sender][token].deposited >= tokenAmount, "Insufficient token balance");
+        require(IERC20(token).balanceOf(address(this)) >= tokenAmount, "Insufficient token in Vault");
 
-        // Update balances
-        balances[msg.sender][token].deposited -= tokenAmount;
-        balances[msg.sender][token].credited -= creditAmount;
+        // Update credits
         credits[msg.sender] -= creditAmount;
+        creditsInToken[msg.sender][token] -= creditAmount;
+        if (tokenInfo[token].isStablecoin)
+            withdrawableCredits[msg.sender] -= creditAmount;
 
         IERC20(token).safeTransfer(msg.sender, tokenAmount);
 
         emit Withdrawn(msg.sender, token, tokenAmount, creditAmount);
-        emit CreditsUsed(msg.sender, creditAmount);
     }
 
     // Consumption function ====================================
-    function consume(address user, uint256 usdValue) external onlyRelayer returns (uint256 creditCost) {
+    function consumeCredit(address user, uint256 usdValue) external onlyRelayer returns (uint256 userCredit) {
         require(usdValue > 0, "Value must be > 0");
 
-        creditCost = usdValue * (10 ** creditDecimals);
+        uint256 creditCost = usdValue;
 
         // Enforce minimum
         if (creditCost < minimumConsume) {
@@ -166,33 +214,30 @@ contract GasCreditVault is Ownable {
         address[] memory tokens = whitelistedTokens.values();
         for (uint256 i = 0; i < tokens.length && remaining > 0; i++) {
             address token = tokens[i];
-            UserBalance storage userBal = balances[msg.sender][token];
-            uint256 userCredited = userBal.credited;
+            uint256 userCredited = creditsInToken[user][token];
 
             if (userCredited == 0) continue;
 
             uint256 deduction = userCredited >= remaining ? remaining : userCredited;
 
-            // Calculate proportional token amount to reduce from deposit
-            uint256 tokenAmount = calculateTokenValue(token, deduction);
+            credits[user] -= deduction;
+            creditsInToken[user][token] -= deduction;
+            if (tokenInfo[token].isStablecoin)
+                withdrawableCredits[user] -= deduction;
 
-            require(userBal.deposited >= tokenAmount, "Corrupted state: not enough deposited");
-
-            userBal.credited -= deduction;
-            userBal.deposited -= tokenAmount;
             remaining -= deduction;
         }
 
+        totalConsumedCredits += creditCost;
+        userCredit = credits[user];
         require(remaining == 0, "Not enough credited tokens to burn");
     }
 
     function withdrawConsumedCredits() external onlyOwner {
-        uint256 totalConsumedCredits = totalCreditsConsumed;
-        uint256 withdrawnCredits = totalCreditsWithdrawnByOwner;
-        require(totalConsumedCredits > withdrawnCredits, "No new credits to withdraw");
+        require(totalConsumedCredits > totalConsumedCreditsWithdrawn, "No new credits to withdraw");
 
-        uint256 deltaCredits = totalConsumedCredits - withdrawnCredits;
-        totalCreditsWithdrawnByOwner = totalConsumedCredits;
+        uint256 deltaCredits = totalConsumedCredits - totalConsumedCreditsWithdrawn;
+        totalConsumedCredits = totalConsumedCredits;
 
         address[] memory tokens = whitelistedTokens.values();
         uint256 totalTokenAmount = 0;
@@ -237,11 +282,11 @@ contract GasCreditVault is Ownable {
         }
 
         (, int256 price,,,) = info.priceFeed.latestRoundData();
-        uint8 priceFeedDecimals = info.priceFeed.decimals();
+        
+        uint8 _decimals = info.decimals + info.priceFeed.decimals();
         
         // Formula: (amount * price) / (10^(tokenDecimals + priceFeedDecimals - creditDecimals))
-        return (amount * uint256(price)) / 
-               (10 ** (info.decimals + priceFeedDecimals - creditDecimals));
+        return convertDecimals(amount * uint256(price), _decimals, creditDecimals);
     }
 
     function calculateTokenValue(address token, uint256 creditAmount) public view returns (uint256) {
@@ -252,11 +297,10 @@ contract GasCreditVault is Ownable {
         }
 
         (, int256 price,,,) = info.priceFeed.latestRoundData();
-        uint8 priceFeedDecimals = info.priceFeed.decimals();
         
-        // Formula: (creditAmount * 10^(tokenDecimals + priceFeedDecimals)) / price
-        return (creditAmount * (10 ** (info.decimals + priceFeedDecimals))) / 
-               uint256(price);
+        uint8 _decimals = info.decimals + info.priceFeed.decimals();
+        // Formula: (creditAmount * 10^(tokenDecimals + priceFeedDecimals)) / (price * 10 ^ creditDecimals) 
+        return convertDecimals(creditAmount / uint256(price), creditDecimals, _decimals);
     }
 
     function convertDecimals(uint256 amount, uint8 from, uint8 to) internal pure returns (uint256) {
