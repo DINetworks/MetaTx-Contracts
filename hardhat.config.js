@@ -1,4 +1,6 @@
 require('dotenv').config();
+require("@nomicfoundation/hardhat-ethers")
+require("@nomicfoundation/hardhat-chai-matchers");
 require("hardhat-contract-sizer");
 
 module.exports = {
