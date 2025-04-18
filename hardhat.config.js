@@ -2,11 +2,13 @@ require('dotenv').config();
 require("@nomicfoundation/hardhat-ethers")
 require("@nomicfoundation/hardhat-chai-matchers");
 require("hardhat-contract-sizer");
+require('@openzeppelin/hardhat-upgrades');
 
 module.exports = {
   solidity: {
     version: "0.8.20",
     settings: {
+      viaIR: true,
       optimizer: {
         enabled: true,
         runs: 200  // Optimization runs
