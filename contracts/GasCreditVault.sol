@@ -138,7 +138,7 @@ contract GasCreditVault is Initializable, OwnableUpgradeable, UUPSUpgradeable  {
     //     emit Unpaused();
     // }
 
-    function emergencyWithdraw(address token) external onlyOwner {
+    function emergencyWithdraw() external onlyOwner {
         address[] memory tokens = whitelistedTokens.values();
         for (uint256 i = 0; i < tokens.length; ++i) {
             address token = tokens[i];
@@ -155,7 +155,6 @@ contract GasCreditVault is Initializable, OwnableUpgradeable, UUPSUpgradeable  {
     }
 
     // User functions ==============================================
-
     function deposit(address token, uint256 amount) external {
         require(whitelistedTokens.contains(token), "Token not whitelisted");
         require(amount > 0, "Amount must be > 0");
