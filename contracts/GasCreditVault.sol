@@ -1,34 +1,29 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import {IERC20Metadata, IERC20} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
+import {IERC20, IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {EnumerableSet} from "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
 import {AggregatorV3Interface} from "@chainlink/contracts/src/v0.8/shared/interfaces/AggregatorV3Interface.sol";
+import {Initializable} from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
+import {UUPSUpgradeable} from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 
-contract GasCreditVault is Ownable {
+contract GasCreditVault is Initializable, OwnableUpgradeable, UUPSUpgradeable  {
     using SafeERC20 for IERC20;
     using EnumerableSet for EnumerableSet.AddressSet;
     
     struct TokenInfo {
         AggregatorV3Interface priceFeed;
-        uint8 decimals;
         bool isStablecoin;
     }
-
-    struct UserCredits {
-        uint256 totalCredit;
-        uint256 withdrawableCredit;
-        mapping(address => uint256) creditInToken;
-    }
-
     // Events
     event TokenWhitelisted(address indexed token, address priceFeed);
     event TokenRemoved(address indexed token);
     event Deposited(address indexed user, address indexed token, uint256 amount, uint256 credited);
     event Withdrawn(address indexed user, address indexed token, uint256 amount, uint256 credited);
     event CreditsConsumed(address indexed user, uint256 usdValue, uint256 creditCost);
+    event CreditTransfer(address indexed sender, address indexed receiver, uint256 creditAmount);
     event OwnerWithdrawn(address indexed token, uint256 amount, uint256 creditedConsumed);
     event RelayerAdded(address indexed relayer);
     event RelayerRemoved(address indexed relayer);
@@ -41,19 +36,27 @@ contract GasCreditVault is Ownable {
 
     mapping(address => TokenInfo) public tokenInfo;
     mapping(address => uint256) public credits;
-    mapping(address => uint256) public withdrawableCredits;
     mapping(address => mapping(address => uint256)) public creditsInToken;
     mapping(address => uint256) public totalConsumed;
     
     uint256 public totalConsumedCreditsWithdrawn;
     uint256 public totalConsumedCredits;
 
-    uint256 public minimumConsume = 5 * 10 ** 17;
+    uint256 public minimumConsume;
     uint8 public constant creditDecimals = 18;
 
-    bool public paused;
+    // bool public paused;
 
-    constructor(address initialOwner) Ownable(initialOwner) {}
+    /// @custom:oz-upgrades-unsafe-allow constructor
+    constructor() {
+        _disableInitializers();
+    }
+
+    function initialize() public initializer {
+        __Ownable_init();
+        __UUPSUpgradeable_init();
+        minimumConsume = 0.5 ether;
+    }
 
     // Modifiers
     modifier onlyRelayer() {
@@ -66,15 +69,15 @@ contract GasCreditVault is Ownable {
         _;
     }
 
-    modifier whenNotPaused() {
-        require(!paused, "Paused");
-        _;
-    }
+    // modifier whenNotPaused() {
+    //     require(!paused, "Paused");
+    //     _;
+    // }
 
-    modifier whenPaused() {
-        require(paused, "Unpaused");
-        _;
-    }
+    // modifier whenPaused() {
+    //     require(paused, "Unpaused");
+    //     _;
+    // }
     // Owner functions ==============================================
 
     // Function to add a whitelisted relayer
@@ -104,12 +107,9 @@ contract GasCreditVault is Ownable {
         require(!whitelistedTokens.contains(token), "Token already whitelisted");
         require(priceFeed != address(0), "Invalid price feed");
         
-        uint8 tokenDecimals = IERC20Metadata(token).decimals();
-        
         whitelistedTokens.add(token);
         tokenInfo[token] = TokenInfo({
             priceFeed: AggregatorV3Interface(priceFeed),
-            decimals: tokenDecimals,
             isStablecoin: isStablecoin
         });
 
@@ -121,35 +121,32 @@ contract GasCreditVault is Ownable {
         require(whitelistedTokens.contains(token), "Token not whitelisted");
         whitelistedTokens.remove(token);
         delete tokenInfo[token];
+
         emit TokenRemoved(token);
     }
 
     // Emergency functions - pause/unpause protocol
-    function pause() external onlyOwner {
-        require(!paused, "Already paused");
-        paused = true;
-        emit Paused();
-    }
+    // function pause() external onlyOwner {
+    //     require(!paused, "Already paused");
+    //     paused = true;
+    //     emit Paused();
+    // }
 
-    function unpause() external onlyOwner {
-        require(paused, "Not paused");
-        paused = false;
-        emit Unpaused();
-    }
+    // function unpause() external onlyOwner {
+    //     require(paused, "Not paused");
+    //     paused = false;
+    //     emit Unpaused();
+    // }
 
-    function _emergencyWithdraw(address token) internal {
-        uint256 balance = IERC20(token).balanceOf(address(this));
-        IERC20(token).safeTransfer(owner(), balance);
-
-        emit EmergencyWithdrawn(token, balance);
-    }
-
-    function emergencyWithdraw() external onlyOwner whenPaused {
+    function emergencyWithdraw(address token) external onlyOwner {
         address[] memory tokens = whitelistedTokens.values();
-        for (uint256 i = 0; i < tokens.length; i++) {
+        for (uint256 i = 0; i < tokens.length; ++i) {
             address token = tokens[i];
-            _emergencyWithdraw(token);
-        }
+            uint256 balance = IERC20(token).balanceOf(address(this));
+            IERC20(token).safeTransfer(owner(), balance);
+
+            emit EmergencyWithdrawn(token, balance);
+        }        
     }
 
     function setMinimumConsume(uint256 _minimum) external onlyOwner {
@@ -159,7 +156,7 @@ contract GasCreditVault is Ownable {
 
     // User functions ==============================================
 
-    function deposit(address token, uint256 amount) external whenNotPaused {
+    function deposit(address token, uint256 amount) external {
         require(whitelistedTokens.contains(token), "Token not whitelisted");
         require(amount > 0, "Amount must be > 0");
 
@@ -169,16 +166,11 @@ contract GasCreditVault is Ownable {
 
         credits[msg.sender] += creditedAmount;
         creditsInToken[msg.sender][token] += creditedAmount;
-        if (tokenInfo[token].isStablecoin)
-            withdrawableCredits[msg.sender] += creditedAmount;
 
         emit Deposited(msg.sender, token, amount, creditedAmount);
     }
 
-    function withdraw(address token, uint256 creditAmount) external onlyStablecoin(token) whenNotPaused {
-        require(whitelistedTokens.contains(token), "Token not whitelisted");
-        require(creditAmount > 0, "Amount must be > 0");
-        require(credits[msg.sender] >= creditAmount, "Insufficient credits");
+    function withdraw(address token, uint256 creditAmount) external onlyStablecoin(token) {
         require(creditsInToken[msg.sender][token] >= creditAmount, "Insufficient token balance");
 
         uint256 tokenAmount = calculateTokenValue(token, creditAmount);
@@ -187,8 +179,6 @@ contract GasCreditVault is Ownable {
         // Update credits
         credits[msg.sender] -= creditAmount;
         creditsInToken[msg.sender][token] -= creditAmount;
-        if (tokenInfo[token].isStablecoin)
-            withdrawableCredits[msg.sender] -= creditAmount;
 
         IERC20(token).safeTransfer(msg.sender, tokenAmount);
 
@@ -196,15 +186,10 @@ contract GasCreditVault is Ownable {
     }
 
     // Consumption function ====================================
-    function consumeCredit(address user, uint256 usdValue) external onlyRelayer returns (uint256 userCredit) {
+    function consumeCredit(address user, uint256 usdValue) external onlyRelayer {
         require(usdValue > 0, "Value must be > 0");
 
-        uint256 creditCost = usdValue;
-
-        // Enforce minimum
-        if (creditCost < minimumConsume) {
-            creditCost = minimumConsume;
-        }
+        uint256 creditCost = usdValue > minimumConsume ? usdValue : minimumConsume;
 
         require(credits[user] >= creditCost, "Insufficient credits");
 
@@ -212,7 +197,7 @@ contract GasCreditVault is Ownable {
 
         // Iterate over whitelisted tokens and deduct credited and deposited accordingly
         address[] memory tokens = whitelistedTokens.values();
-        for (uint256 i = 0; i < tokens.length && remaining > 0; i++) {
+        for (uint256 i = 0; i < tokens.length && remaining > 0; ++i) {
             address token = tokens[i];
             uint256 userCredited = creditsInToken[user][token];
 
@@ -220,17 +205,38 @@ contract GasCreditVault is Ownable {
 
             uint256 deduction = userCredited >= remaining ? remaining : userCredited;
 
-            credits[user] -= deduction;
             creditsInToken[user][token] -= deduction;
-            if (tokenInfo[token].isStablecoin)
-                withdrawableCredits[user] -= deduction;
 
             remaining -= deduction;
         }
 
+        credits[user] -= creditCost;
         totalConsumedCredits += creditCost;
-        userCredit = credits[user];
-        require(remaining == 0, "Not enough credited tokens to burn");
+        // require(remaining == 0, "Not enough credited tokens to burn");
+    }
+
+    function transferCredit(address receiver, uint256 credit) external {
+        address sender = msg.sender;
+        require(credit > minimumConsume && credits[sender] > credit, 'Invalid amount');
+        
+        uint256 remaining = credit;
+        address[] memory tokens = whitelistedTokens.values();
+        for (uint256 i = 0; i < tokens.length && remaining > 0; ++i) {
+            address token = tokens[i];
+            uint256 userCredited = creditsInToken[sender][token];
+
+            if (userCredited == 0) continue;
+
+            uint256 deduction = userCredited >= remaining ? remaining : userCredited;
+
+            creditsInToken[sender][token] -= deduction;
+            creditsInToken[receiver][token] += deduction;
+            remaining -= deduction;
+        }
+
+        credits[receiver] += credit;
+        credits[sender] -= credit;
+        emit CreditTransfer(sender, receiver, credit);
     }
 
     function withdrawConsumedCredits() external onlyOwner {
@@ -243,7 +249,7 @@ contract GasCreditVault is Ownable {
         uint256 totalTokenAmount = 0;
 
         // Step 1: Calculate the total token amount corresponding to the consumed credits
-        for (uint256 i = 0; i < tokens.length; i++) {
+        for (uint256 i = 0; i < tokens.length; ++i) {
             address token = tokens[i];
 
             // Get the token balance for the contract
@@ -270,55 +276,55 @@ contract GasCreditVault is Ownable {
         }
 
         // Total withdrawal value for owner
-        require(totalTokenAmount > 0, "No tokens to withdraw");
+        // require(totalTokenAmount > 0, "No tokens to withdraw");
     }
 
     // Price calculation functions ================================
-    function calculateCreditValue(address token, uint256 amount) public view returns (uint256) {
+    function calculateCreditValue(address token, uint256 amount) internal view returns (uint256) {
         TokenInfo memory info = tokenInfo[token];
+        uint8 tokenDecimals = IERC20Metadata(token).decimals();
         
         if (info.isStablecoin) {
-            return convertDecimals(amount, info.decimals, creditDecimals);
+            return convertDecimals(amount, tokenDecimals, creditDecimals);
         }
 
         (, int256 price,,,) = info.priceFeed.latestRoundData();
         
-        uint8 _decimals = info.decimals + info.priceFeed.decimals();
+        uint8 _decimals = tokenDecimals + info.priceFeed.decimals();
         
         // Formula: (amount * price) / (10^(tokenDecimals + priceFeedDecimals - creditDecimals))
         return convertDecimals(amount * uint256(price), _decimals, creditDecimals);
     }
 
-    function calculateTokenValue(address token, uint256 creditAmount) public view returns (uint256) {
+    function calculateTokenValue(address token, uint256 creditAmount) internal view returns (uint256) {
         TokenInfo memory info = tokenInfo[token];
-        
+        uint8 tokenDecimals = IERC20Metadata(token).decimals();
+
         if (info.isStablecoin) {
-            return convertDecimals(creditAmount, creditDecimals, info.decimals);
+            return convertDecimals(creditAmount, creditDecimals, tokenDecimals);
         }
 
         (, int256 price,,,) = info.priceFeed.latestRoundData();
         
-        uint8 _decimals = info.decimals + info.priceFeed.decimals();
+        uint8 _decimals = tokenDecimals + info.priceFeed.decimals();
         // Formula: (creditAmount * 10^(tokenDecimals + priceFeedDecimals)) / (price * 10 ^ creditDecimals) 
         return convertDecimals(creditAmount / uint256(price), creditDecimals, _decimals);
     }
 
     function convertDecimals(uint256 amount, uint8 from, uint8 to) internal pure returns (uint256) {
-        return from > to ? 
-            amount / (10 ** (from - to)) :
-            amount * (10 ** (to - from));
+        unchecked {
+            return from > to ? 
+                amount / (10 ** (from - to)) :
+                amount * (10 ** (to - from));
+        }
     }
+
+    function _authorizeUpgrade(address newImplementation) internal override onlyOwner {}
+
 
     // View functions =============================================
-
     function getWhitelistedTokens() external view returns (address[] memory) {
         return whitelistedTokens.values();
-    }
-
-    function getTokenPrice(address token) external view returns (int256) {
-        require(whitelistedTokens.contains(token), "Token not whitelisted");
-        (, int256 price,,,) = tokenInfo[token].priceFeed.latestRoundData();
-        return price;
     }
 
     function getCreditValue(address token, uint256 amount) external view returns (uint256) {

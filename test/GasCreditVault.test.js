@@ -1,5 +1,5 @@
 const { expect } = require("chai");
-const { ethers } = require("hardhat");
+const { ethers, upgrades } = require("hardhat");
 
 describe("GasCreditVault", function () {
   let vault, owner, user, relayer, token, stableToken;
@@ -36,8 +36,12 @@ describe("GasCreditVault", function () {
     await stablePriceFeed.waitForDeployment();
 
     // Deploy vault
-    const Vault = await ethers.getContractFactory("GasCreditVault");
-    vault = await Vault.deploy(owner.address);
+    const Vault = await ethers.getContractFactory("GasCreditVault", owner);
+
+    vault = await upgrades.deployProxy(Vault, [], {
+      initializer: "initialize",
+      kind: "uups",
+    })
     await vault.waitForDeployment();
 
     // Setup vault
@@ -87,7 +91,6 @@ describe("GasCreditVault", function () {
       // Setup initial deposit for consumption tests
       await token.connect(user).approve(vault.target, MEDIUM_AMOUNT);
       await vault.connect(user).deposit(token.target, MEDIUM_AMOUNT);
-      console.log('user credits', ethers.formatEther(await vault.credits(user.address)));
     });
 
     it("should consume credits by relayer", async function () {
@@ -140,7 +143,7 @@ describe("GasCreditVault", function () {
     it("should revert when non-owner tries to withdraw consumed credits", async function () {
       await expect(
         vault.connect(user).withdrawConsumedCredits()
-      ).to.be.revertedWithCustomError(vault, "OwnableUnauthorizedAccount");
+      ).to.be.revertedWith("Ownable: caller is not the owner");
     });
   });
 });
