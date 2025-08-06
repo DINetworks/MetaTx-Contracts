@@ -1,151 +1,321 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import { Ownable } from "@openzeppelin/contracts/access/Ownable.sol";
-import { EnumerableSet } from "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
-import { ECDSA } from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
-import { IERC20 } from "@openzeppelin/contracts/interfaces/IERC20.sol";
+import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
+import {Initializable} from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
+import {ReentrancyGuardUpgradeable} from "@openzeppelin/contracts-upgradeable/security/ReentrancyGuardUpgradeable.sol";
+import {UUPSUpgradeable} from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 
-contract MetaTxGateway is Ownable {
-
+/**
+ * @title MetaTxGateway
+ * @notice Gateway for executing gasless meta-transactions on any EVM chain
+ * @dev Does not handle gas credits - relies on external relayer for credit management
+ * @dev Only supports batch execution - single meta-transactions must be wrapped in a batch
+ * @dev Upgradeable contract using UUPS pattern
+ */
+contract MetaTxGateway is Initializable, OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgradeable {
     using ECDSA for bytes32;
-    using EnumerableSet for EnumerableSet.AddressSet;
 
+    // EIP-712 Domain Separator
     bytes32 private constant EIP712_DOMAIN_TYPEHASH = keccak256(
         "EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"
     );
 
-    bytes32 private constant TRANSFER_TYPEHASH = keccak256(
-        "Transfer(address sender,bytes transferData,uint256 nonce)"
+    // EIP-712 Meta Transaction Typehash for batch transactions
+    bytes32 private constant META_TRANSACTION_TYPEHASH = keccak256(
+        "MetaTransaction(address from,bytes metaTxData,uint256 nonce,uint256 deadline)"
     );
-
-    struct TransferData {
-        address token;
-        address recipient;
-        uint256 amount;
-    }
-
-    // Storage for relayers and nonces
-    mapping(address => bool) public whitelisted;
+    
+    // Relayer management
+    mapping(address => bool) public authorizedRelayers;
+    
+    // Nonce management for replay protection
     mapping(address => uint256) public nonces;
-    EnumerableSet.AddressSet private relayers;
 
-    // Events
-    event RelayerAdded(address indexed relayer);
-    event RelayerRemoved(address indexed relayer);
+    // Storage for batch transaction logs
+    struct BatchTransactionLog {
+        address user;
+        address relayer;
+        bytes metaTxData;
+        uint256 gasUsed;
+        uint256 timestamp;
+        bool[] successes;
+    }
+
+    // Mapping from batch transaction ID to log
+    mapping(uint256 => BatchTransactionLog) public batchTransactionLogs;
+    uint256 public nextBatchId;
+
+    // Separate mapping for storing decoded transactions
+    mapping(uint256 => MetaTransaction[]) public batchTransactions;
+
+    struct MetaTransaction {
+        address to;        // Target contract to call
+        uint256 value;     // ETH value to send (usually 0)
+        bytes data;        // Function call data
+    }
+
+    event RelayerAuthorized(address indexed relayer, bool authorized);
     event MetaTransactionExecuted(
-        address indexed sender, 
-        address indexed relayer, 
-        address[] targets, 
-        address[] recipients, 
-        uint256[] amounts
+        address indexed user,
+        address indexed relayer,
+        address indexed target,
+        bool success
+    );
+    event BatchTransactionExecuted(
+        uint256 indexed batchId,
+        address indexed user,
+        address indexed relayer,
+        uint256 gasUsed,
+        uint256 transactionCount
     );
 
-    constructor(address owner_) Ownable(owner_) {}
-
-    // Modifier to restrict actions to whitelisted relayers only
-    modifier onlyRelayer() {
-        require(relayers.contains(msg.sender), "Caller not whitelisted relayers");
-        _;
+    /// @custom:oz-upgrades-unsafe-allow constructor
+    constructor() {
+        _disableInitializers();
     }
 
-    // Function to add a whitelisted relayer
-    function addWhitelistedRelayer(address relayer) external onlyOwner {
-        require(relayer != address(0), "Invalid address");
-        require(!relayers.contains(relayer), "Relayer already whitelisted");
-
-        relayers.add(relayer);
-
-        emit RelayerAdded(relayer);
+    /**
+     * @dev Initializes the contract with the initial owner
+     * @notice This function can only be called once during deployment
+     */
+    function initialize() public initializer {
+        __Ownable_init();
+        __ReentrancyGuard_init();
+        __UUPSUpgradeable_init();
     }
 
-    // Function to remove a whitelisted relayer
-    function removeWhitelistedRelayer(address relayer) external onlyOwner {
-        require(relayers.contains(relayer), "Relayer not whitelisted");
+    // Owner functions ==============================================
 
-        relayers.remove(relayer);
-
-        emit RelayerRemoved(relayer);
+    /**
+     * @notice Authorize/deauthorize a relayer
+     * @param relayer Relayer address
+     * @param authorized True to authorize, false to deauthorize
+     */
+    function setRelayerAuthorization(address relayer, bool authorized) external onlyOwner {
+        require(relayer != address(0), "Invalid relayer address");
+        authorizedRelayers[relayer] = authorized;
+        emit RelayerAuthorized(relayer, authorized);
     }
 
-    // Function to execute a meta-transfer
-    function executeMetaTransfer(
-        address sender, 
-        bytes memory transferData, 
-        uint256 nonce, 
-        bytes memory signature
-    ) 
-        external 
-        onlyRelayer 
-    {
-        // Ensure the nonce is valid
-        require(nonce == nonces[sender], "Invalid nonce");
+    // Meta-transaction functions ================================
 
-        // Recover the signer's address from the signature
-        address signer = recoverSigner(sender, transferData, nonce, signature);
+    /**
+     * @notice Execute a meta-transaction on behalf of a user (internal use only)
+     * @param from User's address
+     * @param metaTx Meta-transaction data
+     * @return success True if the transaction was successful
+     */
+    function _executeMetaTransaction(
+        address from,
+        MetaTransaction memory metaTx
+    ) internal returns (bool success) {
+        // Execute the transaction with try-catch to handle failures gracefully
+        try this._safeExecuteCall(metaTx.to, metaTx.value, metaTx.data) returns (bool _success) {
+            success = _success;
+        } catch {
+            success = false;
+        }
+        
+        emit MetaTransactionExecuted(from, msg.sender, metaTx.to, success);
+        
+        return success;
+    }
 
-        // Verify that the signer is the actual sender
-        require(signer == sender, "Invalid signature");
+    /**
+     * @notice Helper function to safely execute external calls
+     * @dev This function is external to allow try-catch usage
+     */
+    function _safeExecuteCall(address target, uint256 value, bytes calldata data) external returns (bool success) {
+        require(msg.sender == address(this), "Only self-calls allowed");
+        (success, ) = target.call{value: value}(data);
+        return success;
+    }
 
-        // Decode transferData
-        (address[] memory targets, address[] memory recipients, uint256[] memory amounts) = 
-            abi.decode(transferData, (address[], address[], uint256[]));
+    /**
+     * @notice Batch execute multiple meta-transactions
+     * @param from User's address
+     * @param metaTxData Encoded bytes of Array of meta-transactions
+     * @param signature signature corresponding to entire meta transaction
+     * @param nonce User's nonce
+     * @param deadline Transaction deadline
+     * @return successes Array of success status for each transaction
+     */
+    function executeMetaTransactions(
+        address from,
+        bytes calldata metaTxData,
+        bytes calldata signature,
+        uint256 nonce,
+        uint256 deadline
+    ) external nonReentrant returns (bool[] memory successes) {
+        uint256 batchGasStart = gasleft();
+        
+        require(authorizedRelayers[msg.sender], "Unauthorized relayer");
+        require(block.timestamp <= deadline, "Transaction expired");
+        require(nonce == nonces[from], "Invalid nonce");
+        require(_verifySignature(from, metaTxData, signature, nonce, deadline), "Invalid signature");
 
-        // Validate parameters
-        require(targets.length == recipients.length, "Targets and recipients length mismatch");
-        require(targets.length == amounts.length, "Targets and amounts length mismatch");
+        MetaTransaction[] memory metaTxs = abi.decode(metaTxData, (MetaTransaction[]));
+        require(metaTxs.length > 0, "Empty batch Txs");     
 
-        // Execute the transfers
-        for (uint256 i = 0; i < targets.length; i++) {
-            (bool success, ) = targets[i].call(abi.encodeWithSelector(
-                IERC20.transferFrom.selector, 
-                sender, 
-                recipients[i], 
-                amounts[i]
-            ));
-            require(success, "Meta-transaction failed");
+        successes = new bool[](metaTxs.length);
+
+        // Store batch transaction log
+        uint256 batchId = nextBatchId++;
+
+        // Execute all transactions in the batch
+        for (uint256 i = 0; i < metaTxs.length; i++) {
+            bool success = _executeMetaTransaction(from, metaTxs[i]);
+            
+            batchTransactionLogs[batchId].successes.push(success);
+            batchTransactions[batchId].push(metaTxs[i]);
         }
 
-        // Increment the nonce to prevent replay attacks
-        nonces[sender]++;
+        // Increment nonce to prevent replay
+        nonces[from]++;
+        
+        // Calculate total gas used for the entire batch
+        uint256 totalGasUsed = batchGasStart - gasleft() + 21000; // Add base transaction cost
 
-        // Emit the event
-        emit MetaTransactionExecuted(sender, msg.sender, targets, recipients, amounts);
+        batchTransactionLogs[batchId].user = from;
+        batchTransactionLogs[batchId].relayer = msg.sender;
+        batchTransactionLogs[batchId].metaTxData = metaTxData;
+        batchTransactionLogs[batchId].gasUsed = totalGasUsed;
+        batchTransactionLogs[batchId].timestamp = block.timestamp;
+
+        // Emit batch transaction event
+        emit BatchTransactionExecuted(batchId, from, msg.sender, totalGasUsed, metaTxs.length);
+
+        return successes;
     }
 
-    // Function to recover the signer from the signature
-    function recoverSigner(
-        address sender,
-        bytes memory transferData,
+    // Helper functions ==========================================
+
+    /**
+     * @notice Verify EIP-712 signature for batch meta-transactions
+     * @param from User's address
+     * @param metaTxData Encoded bytes of Meta-transactions data
+     * @param signature User's signature
+     * @param nonce User's nonce
+     * @param deadline User's deadline
+     * @return valid True if signature is valid
+     */
+    function _verifySignature(
+        address from,
+        bytes calldata metaTxData,
+        bytes calldata signature,
         uint256 nonce,
-        bytes memory signature
-    ) private view returns (address) {
-        bytes32 domainSeparator = keccak256(abi.encode(
-            EIP712_DOMAIN_TYPEHASH,
-            keccak256("IXFIGateway"),
-            keccak256("1"), // Version
-            block.chainid,
-            address(this)
-        ));
+        uint256 deadline
+    ) internal view returns (bool valid) {
+        bytes32 domainSeparator = this.getDomainSeparator();
 
         bytes32 structHash = keccak256(abi.encode(
-            TRANSFER_TYPEHASH,
-            sender,
-            keccak256(transferData),
-            nonce
+            META_TRANSACTION_TYPEHASH,
+            from,
+            keccak256(metaTxData),
+            nonce,
+            deadline
         ));
 
         bytes32 digest = keccak256(abi.encodePacked(
-            "\x19\x01", 
-            domainSeparator, 
+            "\x19\x01",
+            domainSeparator,
             structHash
         ));
 
-        return digest.recover(signature);
+        address recoveredSigner = digest.recover(signature);
+        return recoveredSigner == from;
     }
 
-    // Function to get all the whitelisted relayers
-    function getWhitelistedRelayers() external view returns (address[] memory) {
-        return relayers.values();
+    // View functions ============================================
+
+    /**
+     * @notice Get the current nonce for a user
+     * @param user User address
+     * @return currentNonce Current nonce value
+     */
+    function getNonce(address user) external view returns (uint256 currentNonce) {
+        return nonces[user];
     }
+
+    /**
+     * @notice Check if a relayer is authorized
+     * @param relayer Relayer address
+     * @return isAuthorized True if relayer is authorized
+     */
+    function isRelayerAuthorized(address relayer) external view returns (bool isAuthorized) {
+        return authorizedRelayers[relayer];
+    }
+
+    /**
+     * @notice Get the domain separator for EIP-712
+     * @return separator Domain separator hash
+     */
+    function getDomainSeparator() external view returns (bytes32 separator) {
+        return keccak256(abi.encode(
+            EIP712_DOMAIN_TYPEHASH,
+            keccak256("MetaTxGateway"),
+            keccak256("1"),
+            block.chainid,
+            address(this)
+        ));
+    }
+
+    /**
+     * @notice Get batch transaction log by ID
+     * @param batchId Batch transaction ID
+     * @return log Batch transaction log
+     */
+    function getBatchTransactionLog(uint256 batchId) external view returns (BatchTransactionLog memory log) {
+        require(batchId < nextBatchId, "Invalid batch ID");
+        return batchTransactionLogs[batchId];
+    }
+
+    /**
+     * @notice Get batch transaction gas usage by ID
+     * @param batchId Batch transaction ID
+     * @return gasUsed Gas used for the batch transaction
+     */
+    function getBatchGasUsed(uint256 batchId) external view returns (uint256 gasUsed) {
+        require(batchId < nextBatchId, "Invalid batch ID");
+        return batchTransactionLogs[batchId].gasUsed;
+    }
+
+    /**
+     * @notice Get batch transaction successes by ID
+     * @param batchId Batch transaction ID
+     * @return successes Array of success status for each transaction in the batch
+     */
+    function getBatchSuccesses(uint256 batchId) external view returns (bool[] memory successes) {
+        require(batchId < nextBatchId, "Invalid batch ID");
+        return batchTransactionLogs[batchId].successes;
+    }
+
+    /**
+     * @notice Get total number of batch transactions processed
+     * @return count Total batch transaction count
+     */
+    function getTotalBatchCount() external view returns (uint256 count) {
+        return nextBatchId;
+    }
+
+    /**
+     * @notice Get decoded transactions from a batch by ID
+     * @param batchId Batch transaction ID
+     * @return transactions Array of MetaTransaction structs in the batch
+     */
+    function getBatchTransactions(uint256 batchId) external view returns (MetaTransaction[] memory transactions) {
+        require(batchId < nextBatchId, "Invalid batch ID");
+        return batchTransactions[batchId];
+    }
+
+    // Upgrade authorization =====================================
+
+    /**
+     * @dev Authorizes contract upgrades (UUPS pattern)
+     * @param newImplementation The address of the new implementation
+     * @notice Only owner can authorize upgrades
+     */
+    function _authorizeUpgrade(address newImplementation) internal override onlyOwner {}
 }

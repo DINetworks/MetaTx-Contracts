@@ -3,7 +3,16 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "localnode": "npx hardhat node",
+    "deploy": "npm run deploy:token && npm run deploy:metatx && npm run topup",
+    "deploy:token": "npx hardhat run scripts/deploy-token.js --network localhost", 
+    "deploy:metatx": "npx hardhat run scripts/deploy-metatx.js --network bsc", 
+    "topup": "node scripts/topup.js",
+    "bot": "node scripts/update-bot.js",
+    "compile": "npx hardhat compile",
+    "test": "npx hardhat test",
+    "generate-json": "node scripts/generate-standard-json.js",
+    "extract-build": "node scripts/extract-build-info.js"
   },
   "keywords": [],
   "author": "",
@@ -13,9 +22,10 @@
     "@nomicfoundation/hardhat-chai-matchers": "^2.0.8",
     "@nomicfoundation/hardhat-ethers": "^3.0.8",
     "@nomicfoundation/hardhat-toolbox": "^5.0.0",
+    "@nomicfoundation/hardhat-verify": "^2.0.12",
     "dotenv": "^16.4.7",
     "ethers": "^6.13.5",
-    "hardhat": "^2.22.19",
+    "hardhat": "^3.0.0",
     "hardhat-contract-sizer": "^2.10.0"
   },
   "dependencies": {
