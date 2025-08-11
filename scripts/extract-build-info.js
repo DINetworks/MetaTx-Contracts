@@ -2,10 +2,11 @@ const fs = require('fs');
 const path = require('path');
 
 async function extractFromBuildInfo() {
-  const buildInfoDir = '../artifacts/build-info';
+  const buildInfoDir = path.join(__dirname, '../artifacts/build-info');
   
   if (!fs.existsSync(buildInfoDir)) {
     console.error('❌ Build info directory not found. Run: npx hardhat compile');
+    console.error('📁 Looking for:', buildInfoDir);
     return;
   }
   
@@ -28,8 +29,9 @@ async function extractFromBuildInfo() {
   const standardJsonInput = buildInfo.input;
   
   // Write to file
+  const outputPath = path.join(__dirname, '../standard-json-input-from-build.json');
   fs.writeFileSync(
-    'standard-json-input-from-build.json',
+    outputPath,
     JSON.stringify(standardJsonInput, null, 2)
   );
   

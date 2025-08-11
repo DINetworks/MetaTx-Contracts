@@ -60,15 +60,13 @@ async function generateStandardJsonInput() {
       ]
     }
   };
-  
+
   // Write to file
   const outputPath = path.join(__dirname, '../standard-json-input.json');
   fs.writeFileSync(
     outputPath, 
     JSON.stringify(standardJsonInput, null, 2)
-  );
-  
-  console.log('✅ Standard JSON Input generated: standard-json-input.json');
+  );  console.log('✅ Standard JSON Input generated: standard-json-input.json');
   console.log('📁 Files included:', Object.keys(sources));
 }
 

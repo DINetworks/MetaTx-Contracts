@@ -70,6 +70,12 @@ contract MetaTxGateway is Initializable, OwnableUpgradeable, ReentrancyGuardUpgr
         uint256 gasUsed,
         uint256 transactionCount
     );
+    event NativeTokenUsed(
+        uint256 indexed batchId,
+        uint256 totalRequired,
+        uint256 totalUsed,
+        uint256 refunded
+    );
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
@@ -134,6 +140,18 @@ contract MetaTxGateway is Initializable, OwnableUpgradeable, ReentrancyGuardUpgr
     }
 
     /**
+     * @notice Calculate total native token value required for batch transactions
+     * @param metaTxs Array of meta-transactions
+     * @return totalValue Total native token value needed
+     */
+    function _calculateTotalValue(MetaTransaction[] memory metaTxs) internal pure returns (uint256 totalValue) {
+        for (uint256 i = 0; i < metaTxs.length; i++) {
+            totalValue += metaTxs[i].value;
+        }
+        return totalValue;
+    }
+
+    /**
      * @notice Batch execute multiple meta-transactions
      * @param from User's address
      * @param metaTxData Encoded bytes of Array of meta-transactions
@@ -148,7 +166,7 @@ contract MetaTxGateway is Initializable, OwnableUpgradeable, ReentrancyGuardUpgr
         bytes calldata signature,
         uint256 nonce,
         uint256 deadline
-    ) external nonReentrant returns (bool[] memory successes) {
+    ) external payable nonReentrant returns (bool[] memory successes) {
         uint256 batchGasStart = gasleft();
         
         require(authorizedRelayers[msg.sender], "Unauthorized relayer");
@@ -157,19 +175,36 @@ contract MetaTxGateway is Initializable, OwnableUpgradeable, ReentrancyGuardUpgr
         require(_verifySignature(from, metaTxData, signature, nonce, deadline), "Invalid signature");
 
         MetaTransaction[] memory metaTxs = abi.decode(metaTxData, (MetaTransaction[]));
-        require(metaTxs.length > 0, "Empty batch Txs");     
+        require(metaTxs.length > 0, "Empty batch Txs");
+
+        // Calculate total value required for all meta-transactions
+        uint256 totalValueRequired = _calculateTotalValue(metaTxs);
+        require(msg.value == totalValueRequired, "Incorrect native token amount");
 
         successes = new bool[](metaTxs.length);
 
         // Store batch transaction log
         uint256 batchId = nextBatchId++;
+        uint256 valueUsed = 0;
 
         // Execute all transactions in the batch
         for (uint256 i = 0; i < metaTxs.length; i++) {
             bool success = _executeMetaTransaction(from, metaTxs[i]);
             
+            // Track value used for each transaction
+            if (success) {
+                valueUsed += metaTxs[i].value;
+            }
+            
             batchTransactionLogs[batchId].successes.push(success);
             batchTransactions[batchId].push(metaTxs[i]);
+        }
+
+        // Refund unused native tokens if any transactions failed
+        uint256 refundAmount = totalValueRequired - valueUsed;
+        if (refundAmount > 0) {
+            (bool refundSuccess, ) = payable(msg.sender).call{value: refundAmount}("");
+            require(refundSuccess, "Refund failed");
         }
 
         // Increment nonce to prevent replay
@@ -186,6 +221,11 @@ contract MetaTxGateway is Initializable, OwnableUpgradeable, ReentrancyGuardUpgr
 
         // Emit batch transaction event
         emit BatchTransactionExecuted(batchId, from, msg.sender, totalGasUsed, metaTxs.length);
+        
+        // Emit value usage event
+        if (totalValueRequired > 0) {
+            emit NativeTokenUsed(batchId, totalValueRequired, valueUsed, refundAmount);
+        }
 
         return successes;
     }
@@ -231,6 +271,16 @@ contract MetaTxGateway is Initializable, OwnableUpgradeable, ReentrancyGuardUpgr
     // View functions ============================================
 
     /**
+     * @notice Get total native token value required for meta-transactions (external view)
+     * @param metaTxData Encoded bytes of meta-transactions
+     * @return totalValue Total native token value needed
+     */
+    function calculateRequiredValue(bytes calldata metaTxData) external pure returns (uint256 totalValue) {
+        MetaTransaction[] memory metaTxs = abi.decode(metaTxData, (MetaTransaction[]));
+        return _calculateTotalValue(metaTxs);
+    }
+
+    /**
      * @notice Get the current nonce for a user
      * @param user User address
      * @return currentNonce Current nonce value
@@ -256,7 +306,7 @@ contract MetaTxGateway is Initializable, OwnableUpgradeable, ReentrancyGuardUpgr
         return keccak256(abi.encode(
             EIP712_DOMAIN_TYPEHASH,
             keccak256("MetaTxGateway"),
-            keccak256("1"),
+            keccak256("1"), // Version 2 with native token support
             block.chainid,
             address(this)
         ));
@@ -308,6 +358,14 @@ contract MetaTxGateway is Initializable, OwnableUpgradeable, ReentrancyGuardUpgr
     function getBatchTransactions(uint256 batchId) external view returns (MetaTransaction[] memory transactions) {
         require(batchId < nextBatchId, "Invalid batch ID");
         return batchTransactions[batchId];
+    }
+
+    /**
+     * @notice Get the contract version
+     * @return version The version string for this contract
+     */
+    function getVersion() external pure returns (string memory version) {
+        return "v1.0.0-native-token-support";
     }
 
     // Upgrade authorization =====================================

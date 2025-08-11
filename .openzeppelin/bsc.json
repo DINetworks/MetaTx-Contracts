@@ -10,6 +10,11 @@
       "address": "0x5397E79160E9106dB7f24f8D5bf5204BE45E6a9F",
       "txHash": "0xc3aec28b315e93cb27348c2b04295afc60c686b3dbfb6cb6718dfd249f58ce6c",
       "kind": "uups"
+    },
+    {
+      "address": "0xE4caAA15033EEA0F0e6334bf6db200cCb3Ab5E1B",
+      "txHash": "0x98ae52c81afb04885b94954239683d391da7d33a4d28e656c90486484d3ca06f",
+      "kind": "uups"
     }
   ],
   "impls": {
@@ -257,6 +262,249 @@
     "4a4a667d7c692f777c22567bcc34292aed28d406891b532ca8e7b3cd02ed92d6": {
       "address": "0x4bE4fe2ea96D9f8B338f8e5688b56e468Cff0849",
       "txHash": "0xab3d15232a88d732222af633b3eb4f15f43984e1f0c53c26c64f490f1e2d203d",
+      "layout": {
+        "solcVersion": "0.8.20",
+        "storage": [
+          {
+            "label": "_initialized",
+            "offset": 0,
+            "slot": "0",
+            "type": "t_uint8",
+            "contract": "Initializable",
+            "src": "@openzeppelin\\contracts-upgradeable\\proxy\\utils\\Initializable.sol:63",
+            "retypedFrom": "bool"
+          },
+          {
+            "label": "_initializing",
+            "offset": 1,
+            "slot": "0",
+            "type": "t_bool",
+            "contract": "Initializable",
+            "src": "@openzeppelin\\contracts-upgradeable\\proxy\\utils\\Initializable.sol:68"
+          },
+          {
+            "label": "__gap",
+            "offset": 0,
+            "slot": "1",
+            "type": "t_array(t_uint256)50_storage",
+            "contract": "ContextUpgradeable",
+            "src": "@openzeppelin\\contracts-upgradeable\\utils\\ContextUpgradeable.sol:36"
+          },
+          {
+            "label": "_owner",
+            "offset": 0,
+            "slot": "51",
+            "type": "t_address",
+            "contract": "OwnableUpgradeable",
+            "src": "@openzeppelin\\contracts-upgradeable\\access\\OwnableUpgradeable.sol:22"
+          },
+          {
+            "label": "__gap",
+            "offset": 0,
+            "slot": "52",
+            "type": "t_array(t_uint256)49_storage",
+            "contract": "OwnableUpgradeable",
+            "src": "@openzeppelin\\contracts-upgradeable\\access\\OwnableUpgradeable.sol:94"
+          },
+          {
+            "label": "_status",
+            "offset": 0,
+            "slot": "101",
+            "type": "t_uint256",
+            "contract": "ReentrancyGuardUpgradeable",
+            "src": "@openzeppelin\\contracts-upgradeable\\security\\ReentrancyGuardUpgradeable.sol:38"
+          },
+          {
+            "label": "__gap",
+            "offset": 0,
+            "slot": "102",
+            "type": "t_array(t_uint256)49_storage",
+            "contract": "ReentrancyGuardUpgradeable",
+            "src": "@openzeppelin\\contracts-upgradeable\\security\\ReentrancyGuardUpgradeable.sol:88"
+          },
+          {
+            "label": "__gap",
+            "offset": 0,
+            "slot": "151",
+            "type": "t_array(t_uint256)50_storage",
+            "contract": "ERC1967UpgradeUpgradeable",
+            "src": "@openzeppelin\\contracts-upgradeable\\proxy\\ERC1967\\ERC1967UpgradeUpgradeable.sol:169"
+          },
+          {
+            "label": "__gap",
+            "offset": 0,
+            "slot": "201",
+            "type": "t_array(t_uint256)50_storage",
+            "contract": "UUPSUpgradeable",
+            "src": "@openzeppelin\\contracts-upgradeable\\proxy\\utils\\UUPSUpgradeable.sol:111"
+          },
+          {
+            "label": "authorizedRelayers",
+            "offset": 0,
+            "slot": "251",
+            "type": "t_mapping(t_address,t_bool)",
+            "contract": "MetaTxGateway",
+            "src": "contracts\\MetaTxGateway.sol:31"
+          },
+          {
+            "label": "nonces",
+            "offset": 0,
+            "slot": "252",
+            "type": "t_mapping(t_address,t_uint256)",
+            "contract": "MetaTxGateway",
+            "src": "contracts\\MetaTxGateway.sol:34"
+          },
+          {
+            "label": "batchTransactionLogs",
+            "offset": 0,
+            "slot": "253",
+            "type": "t_mapping(t_uint256,t_struct(BatchTransactionLog)1771_storage)",
+            "contract": "MetaTxGateway",
+            "src": "contracts\\MetaTxGateway.sol:47"
+          },
+          {
+            "label": "nextBatchId",
+            "offset": 0,
+            "slot": "254",
+            "type": "t_uint256",
+            "contract": "MetaTxGateway",
+            "src": "contracts\\MetaTxGateway.sol:48"
+          },
+          {
+            "label": "batchTransactions",
+            "offset": 0,
+            "slot": "255",
+            "type": "t_mapping(t_uint256,t_array(t_struct(MetaTransaction)1791_storage)dyn_storage)",
+            "contract": "MetaTxGateway",
+            "src": "contracts\\MetaTxGateway.sol:51"
+          }
+        ],
+        "types": {
+          "t_address": {
+            "label": "address",
+            "numberOfBytes": "20"
+          },
+          "t_array(t_bool)dyn_storage": {
+            "label": "bool[]",
+            "numberOfBytes": "32"
+          },
+          "t_array(t_struct(MetaTransaction)1791_storage)dyn_storage": {
+            "label": "struct MetaTxGateway.MetaTransaction[]",
+            "numberOfBytes": "32"
+          },
+          "t_array(t_uint256)49_storage": {
+            "label": "uint256[49]",
+            "numberOfBytes": "1568"
+          },
+          "t_array(t_uint256)50_storage": {
+            "label": "uint256[50]",
+            "numberOfBytes": "1600"
+          },
+          "t_bool": {
+            "label": "bool",
+            "numberOfBytes": "1"
+          },
+          "t_bytes_storage": {
+            "label": "bytes",
+            "numberOfBytes": "32"
+          },
+          "t_mapping(t_address,t_bool)": {
+            "label": "mapping(address => bool)",
+            "numberOfBytes": "32"
+          },
+          "t_mapping(t_address,t_uint256)": {
+            "label": "mapping(address => uint256)",
+            "numberOfBytes": "32"
+          },
+          "t_mapping(t_uint256,t_array(t_struct(MetaTransaction)1791_storage)dyn_storage)": {
+            "label": "mapping(uint256 => struct MetaTxGateway.MetaTransaction[])",
+            "numberOfBytes": "32"
+          },
+          "t_mapping(t_uint256,t_struct(BatchTransactionLog)1771_storage)": {
+            "label": "mapping(uint256 => struct MetaTxGateway.BatchTransactionLog)",
+            "numberOfBytes": "32"
+          },
+          "t_struct(BatchTransactionLog)1771_storage": {
+            "label": "struct MetaTxGateway.BatchTransactionLog",
+            "members": [
+              {
+                "label": "user",
+                "type": "t_address",
+                "offset": 0,
+                "slot": "0"
+              },
+              {
+                "label": "relayer",
+                "type": "t_address",
+                "offset": 0,
+                "slot": "1"
+              },
+              {
+                "label": "metaTxData",
+                "type": "t_bytes_storage",
+                "offset": 0,
+                "slot": "2"
+              },
+              {
+                "label": "gasUsed",
+                "type": "t_uint256",
+                "offset": 0,
+                "slot": "3"
+              },
+              {
+                "label": "timestamp",
+                "type": "t_uint256",
+                "offset": 0,
+                "slot": "4"
+              },
+              {
+                "label": "successes",
+                "type": "t_array(t_bool)dyn_storage",
+                "offset": 0,
+                "slot": "5"
+              }
+            ],
+            "numberOfBytes": "192"
+          },
+          "t_struct(MetaTransaction)1791_storage": {
+            "label": "struct MetaTxGateway.MetaTransaction",
+            "members": [
+              {
+                "label": "to",
+                "type": "t_address",
+                "offset": 0,
+                "slot": "0"
+              },
+              {
+                "label": "value",
+                "type": "t_uint256",
+                "offset": 0,
+                "slot": "1"
+              },
+              {
+                "label": "data",
+                "type": "t_bytes_storage",
+                "offset": 0,
+                "slot": "2"
+              }
+            ],
+            "numberOfBytes": "96"
+          },
+          "t_uint256": {
+            "label": "uint256",
+            "numberOfBytes": "32"
+          },
+          "t_uint8": {
+            "label": "uint8",
+            "numberOfBytes": "1"
+          }
+        },
+        "namespaces": {}
+      }
+    },
+    "9481a83ac6d7fe53d8a32e506b4db2d6364f34fdffd19504c6ffdc25dbbf204b": {
+      "address": "0x6b20bc4268e3baAbC92e80EA40B6B88160DC4B36",
+      "txHash": "0xc94a2f1ceb45a10ece615de8364191d302142819b4629a656c9bb184dd763aa7",
       "layout": {
         "solcVersion": "0.8.20",
         "storage": [
