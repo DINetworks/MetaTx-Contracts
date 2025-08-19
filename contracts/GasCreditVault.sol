@@ -78,7 +78,7 @@ contract GasCreditVault is Initializable, OwnableUpgradeable, UUPSUpgradeable  {
     function initialize() public initializer {
         __Ownable_init();
         __UUPSUpgradeable_init();
-        minimumConsume = 0.5 ether;
+        minimumConsume = 0.05 ether;
     }
 
     // Modifiers
@@ -340,7 +340,7 @@ contract GasCreditVault is Initializable, OwnableUpgradeable, UUPSUpgradeable  {
     function transferCredit(address receiver, uint256 credit) external whenNotPaused {
         address sender = msg.sender;
         require(receiver != address(0), "Invalid receiver address");
-        require(credit > minimumConsume && credits[sender] >= credit, 'Invalid amount');
+        require(credits[sender] >= credit, 'Invalid amount');
         
         uint256 remaining = credit;
         address[] memory tokens = whitelistedTokens.values();

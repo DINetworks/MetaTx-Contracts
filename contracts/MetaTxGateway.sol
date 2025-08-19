@@ -2,9 +2,11 @@
 pragma solidity ^0.8.20;
 
 import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {Initializable} from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import {ReentrancyGuardUpgradeable} from "@openzeppelin/contracts-upgradeable/security/ReentrancyGuardUpgradeable.sol";
+import {PausableUpgradeable} from "@openzeppelin/contracts-upgradeable/security/PausableUpgradeable.sol";
 import {UUPSUpgradeable} from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 
 /**
@@ -12,9 +14,9 @@ import {UUPSUpgradeable} from "@openzeppelin/contracts-upgradeable/proxy/utils/U
  * @notice Gateway for executing gasless meta-transactions on any EVM chain
  * @dev Does not handle gas credits - relies on external relayer for credit management
  * @dev Only supports batch execution - single meta-transactions must be wrapped in a batch
- * @dev Upgradeable contract using UUPS pattern
+ * @dev Upgradeable contract using UUPS pattern with pause functionality
  */
-contract MetaTxGateway is Initializable, OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgradeable {
+contract MetaTxGateway is Initializable, OwnableUpgradeable, ReentrancyGuardUpgradeable, PausableUpgradeable, UUPSUpgradeable {
     using ECDSA for bytes32;
 
     // EIP-712 Domain Separator
@@ -33,22 +35,16 @@ contract MetaTxGateway is Initializable, OwnableUpgradeable, ReentrancyGuardUpgr
     // Nonce management for replay protection
     mapping(address => uint256) public nonces;
 
-    // Storage for batch transaction logs
-    struct BatchTransactionLog {
-        address user;
-        address relayer;
-        bytes metaTxData;
-        uint256 valueUsed;
-        uint256 timestamp;
-        bool[] successes;
-    }
-
     // Mapping from batch transaction ID to log
-    mapping(uint256 => BatchTransactionLog) public batchTransactionLogs;
     uint256 public nextBatchId;
 
-    // Separate mapping for storing decoded transactions
-    mapping(uint256 => MetaTransaction[]) public batchTransactions;
+    // Pause-related state variables
+    struct PauseInfo {
+        uint256 pausedAt;
+        string pauseReason;
+    }
+    
+    PauseInfo public pauseState;
 
     struct MetaTransaction {
         address to;        // Target contract to call
@@ -63,19 +59,13 @@ contract MetaTxGateway is Initializable, OwnableUpgradeable, ReentrancyGuardUpgr
         address indexed target,
         bool success
     );
-    event BatchTransactionExecuted(
-        uint256 indexed batchId,
-        address indexed user,
-        address indexed relayer,
-        uint256 valueUsed,
-        uint256 transactionCount
-    );
     event NativeTokenUsed(
         uint256 indexed batchId,
         uint256 totalRequired,
         uint256 totalUsed,
         uint256 refunded
     );
+    event PausedWithReason(string reason);
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
@@ -89,6 +79,7 @@ contract MetaTxGateway is Initializable, OwnableUpgradeable, ReentrancyGuardUpgr
     function initialize() public initializer {
         __Ownable_init();
         __ReentrancyGuard_init();
+        __Pausable_init();
         __UUPSUpgradeable_init();
     }
 
@@ -104,6 +95,34 @@ contract MetaTxGateway is Initializable, OwnableUpgradeable, ReentrancyGuardUpgr
         authorizedRelayers[relayer] = authorized;
         emit RelayerAuthorized(relayer, authorized);
     }
+
+    // Pause management functions ================================
+    /**
+     * @notice Pause the contract with a reason
+     * @param reason Reason for pausing the contract
+     */
+    function pauseWithReason(string calldata reason) external onlyOwner {
+        require(!paused(), "Already paused");
+        require(bytes(reason).length > 0, "Pause reason required");
+        
+        pauseState = PauseInfo({
+            pausedAt: block.timestamp,
+            pauseReason: reason
+        });
+        
+        _pause();
+        emit PausedWithReason(reason);
+    }
+
+    /**
+     * @notice Unpause the contract
+     */
+    function unpause() external onlyOwner {
+        require(paused(), "Not paused");
+        _unpause();
+    }
+
+    
 
     // Meta-transaction functions ================================
 
@@ -166,7 +185,7 @@ contract MetaTxGateway is Initializable, OwnableUpgradeable, ReentrancyGuardUpgr
         bytes calldata signature,
         uint256 nonce,
         uint256 deadline
-    ) external payable nonReentrant returns (bool[] memory successes) {
+    ) external payable nonReentrant whenNotPaused returns (bool[] memory successes) {
         require(authorizedRelayers[msg.sender], "Unauthorized relayer");
         require(block.timestamp <= deadline, "Transaction expired");
         require(nonce == nonces[from], "Invalid nonce");
@@ -176,8 +195,11 @@ contract MetaTxGateway is Initializable, OwnableUpgradeable, ReentrancyGuardUpgr
         require(metaTxs.length > 0, "Empty batch Txs");
 
         // Calculate total value required for all meta-transactions
-        uint256 totalValueRequired = _calculateTotalValue(metaTxs);
-        require(msg.value == totalValueRequired, "Incorrect native token amount");
+        uint256 totalValueRequired = 0;
+        if (msg.value > 0) {
+            totalValueRequired = _calculateTotalValue(metaTxs);
+            require(msg.value == totalValueRequired, "Incorrect native token amount");
+        }
 
         successes = new bool[](metaTxs.length);
 
@@ -193,35 +215,21 @@ contract MetaTxGateway is Initializable, OwnableUpgradeable, ReentrancyGuardUpgr
             if (success) {
                 valueUsed += metaTxs[i].value;
             }
-            
-            batchTransactionLogs[batchId].successes.push(success);
-            batchTransactions[batchId].push(metaTxs[i]);
         }
 
         // Refund unused native tokens if any transactions failed
-        uint256 refundAmount = totalValueRequired - valueUsed;
-        if (refundAmount > 0) {
-            (bool refundSuccess, ) = payable(msg.sender).call{value: refundAmount}("");
-            require(refundSuccess, "Refund failed");
-        }
-
-        // Increment nonce to prevent replay
-        nonces[from]++;
-        
-        
-        batchTransactionLogs[batchId].user = from;
-        batchTransactionLogs[batchId].relayer = msg.sender;
-        batchTransactionLogs[batchId].metaTxData = metaTxData;
-        batchTransactionLogs[batchId].timestamp = block.timestamp;
-        batchTransactionLogs[batchId].valueUsed = totalValueRequired;
-
-        // Emit batch transaction event
-        emit BatchTransactionExecuted(batchId, from, msg.sender, totalValueRequired, metaTxs.length);
-        
-        // Emit value usage event
         if (totalValueRequired > 0) {
+            uint256 refundAmount = totalValueRequired - valueUsed;
+            if (refundAmount > 0) {
+                (bool refundSuccess, ) = payable(from).call{value: refundAmount}("");
+                require(refundSuccess, "Refund failed");
+            }
+
             emit NativeTokenUsed(batchId, totalValueRequired, valueUsed, refundAmount);
         }
+        
+        // Increment nonce to prevent replay
+        nonces[from]++;        
 
         return successes;
     }
@@ -309,51 +317,11 @@ contract MetaTxGateway is Initializable, OwnableUpgradeable, ReentrancyGuardUpgr
     }
 
     /**
-     * @notice Get batch transaction log by ID
-     * @param batchId Batch transaction ID
-     * @return log Batch transaction log
-     */
-    function getBatchTransactionLog(uint256 batchId) external view returns (BatchTransactionLog memory log) {
-        require(batchId < nextBatchId, "Invalid batch ID");
-        return batchTransactionLogs[batchId];
-    }
-
-    /**
-     * @notice Get batch transaction gas usage by ID
-     * @param batchId Batch transaction ID
-     * @return valueUsed native token used for the batch transaction
-     */
-    function getBatchValueUsed(uint256 batchId) external view returns (uint256 valueUsed) {
-        require(batchId < nextBatchId, "Invalid batch ID");
-        return batchTransactionLogs[batchId].valueUsed;
-    }
-
-    /**
-     * @notice Get batch transaction successes by ID
-     * @param batchId Batch transaction ID
-     * @return successes Array of success status for each transaction in the batch
-     */
-    function getBatchSuccesses(uint256 batchId) external view returns (bool[] memory successes) {
-        require(batchId < nextBatchId, "Invalid batch ID");
-        return batchTransactionLogs[batchId].successes;
-    }
-
-    /**
      * @notice Get total number of batch transactions processed
      * @return count Total batch transaction count
      */
     function getTotalBatchCount() external view returns (uint256 count) {
         return nextBatchId;
-    }
-
-    /**
-     * @notice Get decoded transactions from a batch by ID
-     * @param batchId Batch transaction ID
-     * @return transactions Array of MetaTransaction structs in the batch
-     */
-    function getBatchTransactions(uint256 batchId) external view returns (MetaTransaction[] memory transactions) {
-        require(batchId < nextBatchId, "Invalid batch ID");
-        return batchTransactions[batchId];
     }
 
     /**
