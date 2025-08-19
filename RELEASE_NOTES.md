@@ -108,7 +108,7 @@ This release implements UUPS upgradeable pattern:
 
 ### 🤝 Contributing
 
-- **Repository**: [MetaTx-Contracts](https://github.com/IXFILabs/MetaTx-Contracts)
+- **Repository**: [MetaTx-Contracts](https://github.com/DINetworks/MetaTx-Contracts)
 - **Issues**: GitHub Issues for bug reports and feature requests
 - **Security**: Contact team for security-related concerns
 

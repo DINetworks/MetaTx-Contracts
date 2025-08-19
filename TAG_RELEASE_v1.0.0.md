@@ -37,7 +37,7 @@
 - **Exact value validation**: Prevents under/over-funding of meta-transactions
 - **Automatic refund system**: Protects relayers from lost funds
 - **Enhanced monitoring**: `NativeTokenUsed` events for better observability
-- **Version tracking**: `getVersion()` function returns "v2.0.0-native-token-support"
+- **Version tracking**: `getVersion()` function returns "v1.0.0-native-token-support"
 - **Value calculation**: `calculateRequiredValue()` utility for frontend integration
 
 ### 🛡️ Security
@@ -58,14 +58,14 @@
 - **MIT licensed**: Open source with comprehensive examples
 
 ### 🔗 Integration
-Perfect for dApps requiring gasless user experiences with native token support. Enhanced MetaTxGateway v2.0.0 provides:
+Perfect for dApps requiring gasless user experiences with native token support. Enhanced MetaTxGateway v1.0.0 provides:
 - **Seamless UX**: Users pay no gas fees while maintaining full functionality
 - **Financial safety**: Built-in protections against fund loss
 - **Scalable architecture**: Batch processing for efficiency
 - **Developer friendly**: Clear APIs and comprehensive documentation
 
 ### 🚀 Upgrade Path
-- **Fresh deployments**: Use enhanced MetaTxGateway v2.0.0 directly
+- **Fresh deployments**: Use enhanced MetaTxGateway v1.0.0 directly
 - **Existing users**: Storage-safe upgrade path available
 - **Backwards compatibility**: EIP-712 version distinction for gradual migration
 

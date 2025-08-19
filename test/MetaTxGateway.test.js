@@ -56,7 +56,7 @@ describe("MetaTxGateway", () => {
 
     // EIP712 domain separator
     const domain = {
-      name: "IXFIGateway",
+      name: "MetaTxGateway",
       version: "1",
       chainId,
       verifyingContract: gateway.target,
@@ -105,7 +105,7 @@ describe("MetaTxGateway", () => {
     const nonce = await gateway.nonces(sender.address);
 
     const domain = {
-      name: "IXFIGateway",
+      name: "MetaTxGateway",
       version: "1",
       chainId,
       verifyingContract: gateway.target,

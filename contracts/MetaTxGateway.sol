@@ -38,7 +38,7 @@ contract MetaTxGateway is Initializable, OwnableUpgradeable, ReentrancyGuardUpgr
         address user;
         address relayer;
         bytes metaTxData;
-        uint256 gasUsed;
+        uint256 valueUsed;
         uint256 timestamp;
         bool[] successes;
     }
@@ -67,7 +67,7 @@ contract MetaTxGateway is Initializable, OwnableUpgradeable, ReentrancyGuardUpgr
         uint256 indexed batchId,
         address indexed user,
         address indexed relayer,
-        uint256 gasUsed,
+        uint256 valueUsed,
         uint256 transactionCount
     );
     event NativeTokenUsed(
@@ -167,8 +167,6 @@ contract MetaTxGateway is Initializable, OwnableUpgradeable, ReentrancyGuardUpgr
         uint256 nonce,
         uint256 deadline
     ) external payable nonReentrant returns (bool[] memory successes) {
-        uint256 batchGasStart = gasleft();
-        
         require(authorizedRelayers[msg.sender], "Unauthorized relayer");
         require(block.timestamp <= deadline, "Transaction expired");
         require(nonce == nonces[from], "Invalid nonce");
@@ -210,17 +208,15 @@ contract MetaTxGateway is Initializable, OwnableUpgradeable, ReentrancyGuardUpgr
         // Increment nonce to prevent replay
         nonces[from]++;
         
-        // Calculate total gas used for the entire batch
-        uint256 totalGasUsed = batchGasStart - gasleft() + 21000; // Add base transaction cost
-
+        
         batchTransactionLogs[batchId].user = from;
         batchTransactionLogs[batchId].relayer = msg.sender;
         batchTransactionLogs[batchId].metaTxData = metaTxData;
-        batchTransactionLogs[batchId].gasUsed = totalGasUsed;
         batchTransactionLogs[batchId].timestamp = block.timestamp;
+        batchTransactionLogs[batchId].valueUsed = totalValueRequired;
 
         // Emit batch transaction event
-        emit BatchTransactionExecuted(batchId, from, msg.sender, totalGasUsed, metaTxs.length);
+        emit BatchTransactionExecuted(batchId, from, msg.sender, totalValueRequired, metaTxs.length);
         
         // Emit value usage event
         if (totalValueRequired > 0) {
@@ -325,11 +321,11 @@ contract MetaTxGateway is Initializable, OwnableUpgradeable, ReentrancyGuardUpgr
     /**
      * @notice Get batch transaction gas usage by ID
      * @param batchId Batch transaction ID
-     * @return gasUsed Gas used for the batch transaction
+     * @return valueUsed native token used for the batch transaction
      */
-    function getBatchGasUsed(uint256 batchId) external view returns (uint256 gasUsed) {
+    function getBatchValueUsed(uint256 batchId) external view returns (uint256 valueUsed) {
         require(batchId < nextBatchId, "Invalid batch ID");
-        return batchTransactionLogs[batchId].gasUsed;
+        return batchTransactionLogs[batchId].valueUsed;
     }
 
     /**
