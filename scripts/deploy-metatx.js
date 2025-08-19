@@ -52,6 +52,9 @@ async function main() {
   await gatewayContract.waitForDeployment();
   console.log('MetaTxGateway(Proxy)', gatewayContract.target);
 
+  const relayerTx2 = await gatewayContract.setRelayerAuthorization(RELAYER, true);
+  await relayerTx2.wait()
+
   console.log("MetaTx Contracts deployment completed.");
 }
 
