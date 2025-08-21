@@ -35,15 +35,12 @@ async function main() {
   const whitelistTx2 = await creditVault.whitelistToken(TOKENS.USDC, ZERO_ADDRESS, true);
   await whitelistTx2.wait()
 
-  const relayerTx = await creditVault.addWhitelistedRelayer(RELAYER);
-  await relayerTx.wait()
-
   // const whitelistTx3 = await creditVault.whitelistToken(TOKENS.DI, DI_ORACLE, false);
   // await whitelistTx3.wait()
   
-  // const addRelayerTx = await creditVault.addWhitelistedRelayer(RELAYER.address);
-  // await addRelayerTx.wait()
-
+  const relayerTx = await creditVault.addWhitelistedRelayer(RELAYER);
+  await relayerTx.wait()
+  
   const GatewayFactory = await ethers.getContractFactory("MetaTxGateway", wallet);
   const gatewayContract = await upgrades.deployProxy(GatewayFactory, [], {
     initializer: "initialize",

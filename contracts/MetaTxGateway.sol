@@ -24,9 +24,14 @@ contract MetaTxGateway is Initializable, OwnableUpgradeable, ReentrancyGuardUpgr
         "EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"
     );
 
-    // EIP-712 Meta Transaction Typehash for batch transactions
+    // EIP-712 MetaTransaction struct typehash
+    bytes32 private constant META_TRANSACTION_STRUCT_TYPEHASH = keccak256(
+        "MetaTransaction(address to,uint256 value,bytes data)"
+    );
+
+    // EIP-712 Main typehash for batch meta-transactions
     bytes32 private constant META_TRANSACTION_TYPEHASH = keccak256(
-        "MetaTransaction(address from,bytes metaTxData,uint256 nonce,uint256 deadline)"
+        "MetaTransactions(address from,MetaTransaction[] metaTxs,uint256 nonce,uint256 deadline)MetaTransaction(address to,uint256 value,bytes data)"
     );
     
     // Relayer management
@@ -54,9 +59,11 @@ contract MetaTxGateway is Initializable, OwnableUpgradeable, ReentrancyGuardUpgr
 
     event RelayerAuthorized(address indexed relayer, bool authorized);
     event MetaTransactionExecuted(
-        address indexed user,
         address indexed relayer,
+        address indexed user,
         address indexed target,
+        uint256 value,
+        bytes data,
         bool success
     );
     event NativeTokenUsed(
@@ -66,6 +73,7 @@ contract MetaTxGateway is Initializable, OwnableUpgradeable, ReentrancyGuardUpgr
         uint256 refunded
     );
     event PausedWithReason(string reason);
+    event TokenRescued(address indexed token, address indexed to, uint256 amount);
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
@@ -143,7 +151,7 @@ contract MetaTxGateway is Initializable, OwnableUpgradeable, ReentrancyGuardUpgr
             success = false;
         }
         
-        emit MetaTransactionExecuted(from, msg.sender, metaTx.to, success);
+        emit MetaTransactionExecuted(msg.sender, from, metaTx.to, metaTx.value, metaTx.data, success);
         
         return success;
     }
@@ -163,7 +171,7 @@ contract MetaTxGateway is Initializable, OwnableUpgradeable, ReentrancyGuardUpgr
      * @param metaTxs Array of meta-transactions
      * @return totalValue Total native token value needed
      */
-    function _calculateTotalValue(MetaTransaction[] memory metaTxs) internal pure returns (uint256 totalValue) {
+    function _calculateTotalValue(MetaTransaction[] calldata metaTxs) internal pure returns (uint256 totalValue) {
         for (uint256 i = 0; i < metaTxs.length; i++) {
             totalValue += metaTxs[i].value;
         }
@@ -173,7 +181,7 @@ contract MetaTxGateway is Initializable, OwnableUpgradeable, ReentrancyGuardUpgr
     /**
      * @notice Batch execute multiple meta-transactions
      * @param from User's address
-     * @param metaTxData Encoded bytes of Array of meta-transactions
+     * @param metaTxs Array of meta-transactions to execute
      * @param signature signature corresponding to entire meta transaction
      * @param nonce User's nonce
      * @param deadline Transaction deadline
@@ -181,7 +189,7 @@ contract MetaTxGateway is Initializable, OwnableUpgradeable, ReentrancyGuardUpgr
      */
     function executeMetaTransactions(
         address from,
-        bytes calldata metaTxData,
+        MetaTransaction[] calldata metaTxs,
         bytes calldata signature,
         uint256 nonce,
         uint256 deadline
@@ -189,9 +197,8 @@ contract MetaTxGateway is Initializable, OwnableUpgradeable, ReentrancyGuardUpgr
         require(authorizedRelayers[msg.sender], "Unauthorized relayer");
         require(block.timestamp <= deadline, "Transaction expired");
         require(nonce == nonces[from], "Invalid nonce");
-        require(_verifySignature(from, metaTxData, signature, nonce, deadline), "Invalid signature");
+        require(_verifySignature(from, metaTxs, signature, nonce, deadline), "Invalid signature");
 
-        MetaTransaction[] memory metaTxs = abi.decode(metaTxData, (MetaTransaction[]));
         require(metaTxs.length > 0, "Empty batch Txs");
 
         // Calculate total value required for all meta-transactions
@@ -239,7 +246,7 @@ contract MetaTxGateway is Initializable, OwnableUpgradeable, ReentrancyGuardUpgr
     /**
      * @notice Verify EIP-712 signature for batch meta-transactions
      * @param from User's address
-     * @param metaTxData Encoded bytes of Meta-transactions data
+     * @param metaTxs Array of meta-transactions
      * @param signature User's signature
      * @param nonce User's nonce
      * @param deadline User's deadline
@@ -247,40 +254,67 @@ contract MetaTxGateway is Initializable, OwnableUpgradeable, ReentrancyGuardUpgr
      */
     function _verifySignature(
         address from,
-        bytes calldata metaTxData,
+        MetaTransaction[] calldata metaTxs,
         bytes calldata signature,
         uint256 nonce,
         uint256 deadline
     ) internal view returns (bool valid) {
-        bytes32 domainSeparator = this.getDomainSeparator();
+        bytes32 domainSeparator = _buildDomainSeparator();
+        
+        // Hash each MetaTransaction struct according to EIP-712
+        bytes32[] memory metaTxHashes = new bytes32[](metaTxs.length);
+        for (uint256 i = 0; i < metaTxs.length; i++) {
+            metaTxHashes[i] = keccak256(abi.encode(
+                META_TRANSACTION_STRUCT_TYPEHASH,
+                metaTxs[i].to,
+                metaTxs[i].value,
+                keccak256(metaTxs[i].data)
+            ));
+        }
 
+        // Create the main struct hash
         bytes32 structHash = keccak256(abi.encode(
             META_TRANSACTION_TYPEHASH,
             from,
-            keccak256(metaTxData),
+            keccak256(abi.encodePacked(metaTxHashes)),
             nonce,
             deadline
         ));
 
+        // Create the final digest according to EIP-712
         bytes32 digest = keccak256(abi.encodePacked(
             "\x19\x01",
             domainSeparator,
             structHash
         ));
 
+        // Recover signer and verify
         address recoveredSigner = digest.recover(signature);
         return recoveredSigner == from;
+    }
+
+    /**
+     * @notice Build domain separator for EIP-712
+     * @return domainSeparator The domain separator hash
+     */
+    function _buildDomainSeparator() internal view returns (bytes32 domainSeparator) {
+        return keccak256(abi.encode(
+            EIP712_DOMAIN_TYPEHASH,
+            keccak256(bytes("MetaTxGateway")),
+            keccak256(bytes("1")),
+            block.chainid,
+            address(this)
+        ));
     }
 
     // View functions ============================================
 
     /**
      * @notice Get total native token value required for meta-transactions (external view)
-     * @param metaTxData Encoded bytes of meta-transactions
+     * @param metaTxs Array of meta-transactions
      * @return totalValue Total native token value needed
      */
-    function calculateRequiredValue(bytes calldata metaTxData) external pure returns (uint256 totalValue) {
-        MetaTransaction[] memory metaTxs = abi.decode(metaTxData, (MetaTransaction[]));
+    function calculateRequiredValue(MetaTransaction[] calldata metaTxs) external pure returns (uint256 totalValue) {
         return _calculateTotalValue(metaTxs);
     }
 
@@ -307,12 +341,66 @@ contract MetaTxGateway is Initializable, OwnableUpgradeable, ReentrancyGuardUpgr
      * @return separator Domain separator hash
      */
     function getDomainSeparator() external view returns (bytes32 separator) {
-        return keccak256(abi.encode(
-            EIP712_DOMAIN_TYPEHASH,
-            keccak256("MetaTxGateway"),
-            keccak256("1"), // Version 2 with native token support
-            block.chainid,
-            address(this)
+        return _buildDomainSeparator();
+    }
+
+    /**
+     * @notice Get the MetaTransaction struct typehash for EIP-712
+     * @return typehash The MetaTransaction struct typehash
+     */
+    function getMetaTransactionTypehash() external pure returns (bytes32 typehash) {
+        return META_TRANSACTION_STRUCT_TYPEHASH;
+    }
+
+    /**
+     * @notice Get the main typehash for batch meta-transactions
+     * @return typehash The main typehash for EIP-712
+     */
+    function getMainTypehash() external pure returns (bytes32 typehash) {
+        return META_TRANSACTION_TYPEHASH;
+    }
+
+    /**
+     * @notice Generate the EIP-712 digest for signing (helper for frontend)
+     * @param from User's address
+     * @param metaTxs Array of meta-transactions
+     * @param nonce User's nonce
+     * @param deadline Transaction deadline
+     * @return digest The digest to be signed
+     */
+    function getSigningDigest(
+        address from,
+        MetaTransaction[] calldata metaTxs,
+        uint256 nonce,
+        uint256 deadline
+    ) external view returns (bytes32 digest) {
+        bytes32 domainSeparator = _buildDomainSeparator();
+        
+        // Hash each MetaTransaction struct according to EIP-712
+        bytes32[] memory metaTxHashes = new bytes32[](metaTxs.length);
+        for (uint256 i = 0; i < metaTxs.length; i++) {
+            metaTxHashes[i] = keccak256(abi.encode(
+                META_TRANSACTION_STRUCT_TYPEHASH,
+                metaTxs[i].to,
+                metaTxs[i].value,
+                keccak256(metaTxs[i].data)
+            ));
+        }
+
+        // Create the main struct hash
+        bytes32 structHash = keccak256(abi.encode(
+            META_TRANSACTION_TYPEHASH,
+            from,
+            keccak256(abi.encodePacked(metaTxHashes)),
+            nonce,
+            deadline
+        ));
+
+        // Create the final digest according to EIP-712
+        return keccak256(abi.encodePacked(
+            "\x19\x01",
+            domainSeparator,
+            structHash
         ));
     }
 
