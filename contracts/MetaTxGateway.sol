@@ -215,7 +215,7 @@ contract MetaTxGateway is Initializable, OwnableUpgradeable, ReentrancyGuardUpgr
         uint256 valueUsed = 0;
 
         // Execute all transactions in the batch
-        for (uint256 i = 0; i < metaTxs.length; i++) {
+        for (uint256 i = 0; i < metaTxs.length; ++i) {
             bool success = _executeMetaTransaction(from, metaTxs[i]);
             
             // Track value used for each transaction
@@ -263,7 +263,7 @@ contract MetaTxGateway is Initializable, OwnableUpgradeable, ReentrancyGuardUpgr
         
         // Hash each MetaTransaction struct according to EIP-712
         bytes32[] memory metaTxHashes = new bytes32[](metaTxs.length);
-        for (uint256 i = 0; i < metaTxs.length; i++) {
+        for (uint256 i = 0; i < metaTxs.length; ++i) {
             metaTxHashes[i] = keccak256(abi.encode(
                 META_TRANSACTION_STRUCT_TYPEHASH,
                 metaTxs[i].to,
