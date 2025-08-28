@@ -1,3 +1,4 @@
+![DI Protocol](DI-banner.jpg)
 # MetaTx-Contracts Documentation
 
 ## 🚀 Gasless Meta-Transaction System with Native Token Support
@@ -19,7 +20,7 @@ MetaTx-Contracts is a production-ready system that allows users to interact with
 
 ## Core Components
 
-### MetaTxGateway v2.0.0
+### MetaTxGateway v1.0.0
 
 The enhanced meta-transaction execution gateway that handles:
 - Native token validation and automatic refunds
@@ -103,8 +104,8 @@ MetaTx-Contracts implements industry-leading security practices:
 
 - [Quick Start →](getting-started/quick-start.md)
 - [Smart Contracts →](contracts/overview.md)
-- [API Reference →](api/metatxgateway-api.md)
-- [Security Guide →](guides/security-best-practices.md)
+- [API Reference →](api/overview.md)
+- [Resources →](resources/faq.md)
 
 ---
 
