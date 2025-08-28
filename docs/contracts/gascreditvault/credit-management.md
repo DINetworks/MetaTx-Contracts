@@ -14,7 +14,7 @@ Credit management in GasCreditVault encompasses:
 ## Architecture
 
 ```mermaid
-graph TB
+flowchart TB
     subgraph "Credit Lifecycle"
         A[Token Deposit] --> B[Credit Calculation]
         B --> C[Credit Allocation]

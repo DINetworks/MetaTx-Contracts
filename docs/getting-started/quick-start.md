@@ -138,28 +138,59 @@ async function authorizeRelayer() {
 const metaTxs = [{
     to: "0xTokenContractAddress",
     value: 0, // No native token for ERC20 transfer
-    data: "0x..." // Encoded transfer function call
+    data: tokenContract.interface.encodeFunctionData("transfer", [recipient, amount])
 }];
-
-const metaTxData = ethers.utils.defaultAbiCoder.encode(
-    ["tuple(address to, uint256 value, bytes data)[]"],
-    [metaTxs]
-);
 ```
 
-### 3. Sign and Execute
+### 3. Sign the Batch (EIP-712)
 
 ```javascript
-// Calculate required value (0 for ERC20 transfers)
-const requiredValue = await MetaTxGateway.calculateRequiredValue(metaTxData);
+const domain = {
+    name: "MetaTxGateway",
+    version: "1",
+    chainId: await ethers.provider.getNetwork().then(n => n.chainId),
+    verifyingContract: MetaTxGateway.address
+};
 
-// Execute the meta-transaction
+const types = {
+    MetaTransaction: [
+        { name: "to", type: "address" },
+        { name: "value", type: "uint256" },
+        { name: "data", type: "bytes" }
+    ],
+    MetaTransactions: [
+        { name: "from", type: "address" },
+        { name: "metaTxs", type: "MetaTransaction[]" },
+        { name: "nonce", type: "uint256" },
+        { name: "deadline", type: "uint256" }
+    ]
+};
+
+const value = {
+    from: userAddress,
+    metaTxs,
+    nonce: await MetaTxGateway.getNonce(userAddress),
+    deadline: Math.floor(Date.now() / 1000) + 3600 // 1 hour from now
+};
+
+const signature = await userSigner._signTypedData(domain, types, value);
+```
+
+### 4. Calculate Required Value
+
+```javascript
+const requiredValue = await MetaTxGateway.calculateRequiredValue(metaTxs);
+```
+
+### 5. Execute the Meta-Transaction
+
+```javascript
 const tx = await MetaTxGateway.executeMetaTransactions(
     userAddress,
-    metaTxData,
+    metaTxs,
     signature,
-    nonce,
-    deadline,
+    value.nonce,
+    value.deadline,
     { value: requiredValue }
 );
 

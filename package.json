@@ -5,12 +5,13 @@
   "scripts": {
     "localnode": "npx hardhat node",
     "deploy": "npm run deploy:token && npm run deploy:metatx && npm run topup",
-    "deploy:token": "npx hardhat run scripts/deploy-token.js --network localhost",
-    "deploy:metatx": "npx hardhat run scripts/deploy-metatx.js --network mainnet",
+    "deploy:token": "npx hardhat run scripts/deploy-token.js --network bsc",
+    "deploy:metatx": "npx hardhat run scripts/deploy-metatx.js --network bsc",
     "topup": "node scripts/topup.js",
     "bot": "node scripts/update-bot.js",
     "compile": "npx hardhat compile",
-    "test": "npx hardhat test",
+    "test": "npx hardhat test --network bsc",
+    "test2": "npx hardhat run scripts/test.js --network bsc",
     "generate-json": "node scripts/generate-standard-json.js",
     "extract-build": "node scripts/extract-build-info.js"
   },

@@ -169,7 +169,7 @@ npx hardhat compile
 
 ```markdown
 ```mermaid
-graph TB
+flowchart TB
     User[👤 User] --> Frontend[🖥️ Frontend]
     Frontend --> Relayer[🤖 Relayer]
     Relayer --> Gateway[🔄 MetaTxGateway]

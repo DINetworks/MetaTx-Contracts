@@ -9,7 +9,7 @@ GasCreditVault enables users to pre-fund gas credits that can be used by relayer
 ## Architecture
 
 ```mermaid
-graph TB
+flowchart TB
     A[User] -->|Deposit Tokens| B[GasCreditVault]
     B -->|Mint Credits| C[Gas Credits]
     D[Relayer] -->|Request Payment| B

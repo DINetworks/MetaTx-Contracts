@@ -17,7 +17,7 @@ The GasCreditVault contract serves as a secure vault for managing user deposits 
 ## Architecture
 
 ```mermaid
-graph TB
+flowchart TB
     subgraph "GasCreditVault"
         A[Token Deposits] --> B[Price Conversion]
         B --> C[Credit Allocation]

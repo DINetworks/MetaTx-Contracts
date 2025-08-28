@@ -5,7 +5,7 @@ MetaTx-Contracts consists of two main smart contracts designed to work together 
 ## Architecture Diagram
 
 ```mermaid
-graph TB
+flowchart TB
     User[👤 User] --> Frontend[🖥️ Frontend dApp]
     Frontend --> Relayer[🤖 Relayer Service]
     Relayer --> Gateway[🔄 MetaTxGateway]

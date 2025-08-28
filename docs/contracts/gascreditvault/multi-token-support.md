@@ -14,7 +14,7 @@ Multi-token support in GasCreditVault provides:
 ## Architecture
 
 ```mermaid
-graph TB
+flowchart TB
     subgraph "Token Management"
         A[Admin Adds Token] --> B[Price Feed Validation]
         B --> C[Token Configuration]

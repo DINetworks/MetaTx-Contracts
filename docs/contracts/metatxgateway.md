@@ -2,9 +2,11 @@
 
 The MetaTxGateway is the core contract responsible for executing gasless meta-transactions with built-in native token support and automatic refund mechanisms.
 
+**This protocol also includes the DI Token, Token Presale, and Token Staking contracts, providing a complete tokenomics suite.**
+
 ## Overview
 
-MetaTxGateway v2.0.0 represents a significant enhancement over traditional meta-transaction systems by introducing native token validation and automatic refund functionality, ensuring financial safety for both users and relayers.
+MetaTxGateway v1.0.0-native-token-support enables secure, gasless meta-transactions with native token (ETH/BNB) support, batch execution, and relayer authorization.
 
 ## Key Features
 
@@ -12,7 +14,7 @@ MetaTxGateway v2.0.0 represents a significant enhancement over traditional meta-
 Ensures exact native token amounts are provided for meta-transactions that require ETH/BNB transfers.
 
 ### 🔄 Automatic Refunds
-Returns unused native tokens to relayers when transactions fail, preventing fund loss.
+Returns unused native tokens to users when transactions fail, preventing fund loss.
 
 ### 📦 Batch Processing
 Execute multiple transactions in a single call, reducing gas costs and improving efficiency.
@@ -23,6 +25,9 @@ Cryptographically secure meta-transaction authorization with structured data sig
 ### 🔧 UUPS Upgradeable
 Safe upgrade patterns for future enhancements without disrupting existing functionality.
 
+### ⏸️ Pausable
+Owner can pause/unpause contract with a reason.
+
 ## Contract Interface
 
 ### Core Functions
@@ -32,18 +37,18 @@ Safe upgrade patterns for future enhancements without disrupting existing functi
 ```solidity
 function executeMetaTransactions(
     address from,
-    bytes calldata metaTxData,
+    MetaTransaction[] calldata metaTxs,
     bytes calldata signature,
     uint256 nonce,
     uint256 deadline
-) external payable nonReentrant returns (bool[] memory successes)
+) external payable nonReentrant whenNotPaused returns (bool[] memory successes)
 ```
 
 **Purpose**: Execute a batch of meta-transactions on behalf of a user.
 
 **Parameters**:
 - `from`: The user's address (signature signer)
-- `metaTxData`: Encoded array of MetaTransaction structs
+- `metaTxs`: Array of MetaTransaction structs
 - `signature`: EIP-712 signature from the user
 - `nonce`: User's current nonce for replay protection
 - `deadline`: Transaction expiration timestamp
@@ -60,15 +65,13 @@ function executeMetaTransactions(
 #### calculateRequiredValue
 
 ```solidity
-function calculateRequiredValue(bytes calldata metaTxData) 
+function calculateRequiredValue(MetaTransaction[] calldata metaTxs) 
     external pure returns (uint256 totalValue)
 ```
 
 **Purpose**: Calculate the total native token value required for a batch of meta-transactions.
 
 **Use Case**: Frontend applications can use this to determine how much ETH/BNB to include with the relayer transaction.
-
-### Administrative Functions
 
 #### setRelayerAuthorization
 
@@ -79,17 +82,23 @@ function setRelayerAuthorization(address relayer, bool authorized)
 
 **Purpose**: Authorize or deauthorize a relayer address.
 
-**Access Control**: Only contract owner can modify relayer permissions.
-
-### View Functions
-
-#### getVersion
+#### pauseWithReason
 
 ```solidity
-function getVersion() external pure returns (string memory version)
+function pauseWithReason(string calldata reason) external onlyOwner
 ```
 
-**Returns**: "v2.0.0-native-token-support"
+**Purpose**: Pause the contract with a reason.
+
+#### unpause
+
+```solidity
+function unpause() external onlyOwner
+```
+
+**Purpose**: Unpause the contract.
+
+### View Functions
 
 #### getNonce
 
@@ -99,6 +108,14 @@ function getNonce(address user) external view returns (uint256 currentNonce)
 
 **Purpose**: Get the current nonce for a user address.
 
+#### isRelayerAuthorized
+
+```solidity
+function isRelayerAuthorized(address relayer) external view returns (bool isAuthorized)
+```
+
+**Purpose**: Check if a relayer is authorized.
+
 #### getDomainSeparator
 
 ```solidity
@@ -107,7 +124,50 @@ function getDomainSeparator() external view returns (bytes32 separator)
 
 **Purpose**: Get the EIP-712 domain separator for signature verification.
 
-**Note**: Uses version "2" to distinguish from earlier implementations.
+#### getMetaTransactionTypehash
+
+```solidity
+function getMetaTransactionTypehash() external pure returns (bytes32 typehash)
+```
+
+**Purpose**: Get the MetaTransaction struct typehash for EIP-712.
+
+#### getMainTypehash
+
+```solidity
+function getMainTypehash() external pure returns (bytes32 typehash)
+```
+
+**Purpose**: Get the main typehash for batch meta-transactions.
+
+#### getSigningDigest
+
+```solidity
+function getSigningDigest(
+    address from,
+    MetaTransaction[] calldata metaTxs,
+    uint256 nonce,
+    uint256 deadline
+) external view returns (bytes32 digest)
+```
+
+**Purpose**: Helper for frontend to generate the EIP-712 digest for signing.
+
+#### getTotalBatchCount
+
+```solidity
+function getTotalBatchCount() external view returns (uint256 count)
+```
+
+**Purpose**: Get the total number of batch transactions processed.
+
+#### getVersion
+
+```solidity
+function getVersion() external pure returns (string memory version)
+```
+
+**Returns**: "v1.0.0-native-token-support"
 
 ## Data Structures
 
@@ -121,47 +181,30 @@ struct MetaTransaction {
 }
 ```
 
-### BatchTransactionLog
+## Events
+
+### RelayerAuthorized
 
 ```solidity
-struct BatchTransactionLog {
-    address user;           // User who signed the meta-transactions
-    address relayer;        // Relayer who executed the batch
-    bytes metaTxData;       // Original meta-transaction data
-    uint256 gasUsed;        // Total gas consumed
-    uint256 timestamp;      // Block timestamp
-    bool[] successes;       // Success status for each transaction
-}
+event RelayerAuthorized(address indexed relayer, bool authorized);
 ```
 
-## Events
+**Emitted**: When relayer authorization status changes.
 
 ### MetaTransactionExecuted
 
 ```solidity
 event MetaTransactionExecuted(
-    address indexed user,
     address indexed relayer,
+    address indexed user,
     address indexed target,
+    uint256 value,
+    bytes data,
     bool success
 );
 ```
 
 **Emitted**: For each individual meta-transaction execution.
-
-### BatchTransactionExecuted
-
-```solidity
-event BatchTransactionExecuted(
-    uint256 indexed batchId,
-    address indexed user,
-    address indexed relayer,
-    uint256 gasUsed,
-    uint256 transactionCount
-);
-```
-
-**Emitted**: When a batch of meta-transactions is completed.
 
 ### NativeTokenUsed
 
@@ -176,16 +219,21 @@ event NativeTokenUsed(
 
 **Emitted**: When native tokens are used in meta-transactions, showing usage and refund details.
 
-### RelayerAuthorized
+### PausedWithReason
 
 ```solidity
-event RelayerAuthorized(
-    address indexed relayer,
-    bool authorized
-);
+event PausedWithReason(string reason);
 ```
 
-**Emitted**: When relayer authorization status changes.
+**Emitted**: When the contract is paused with a reason.
+
+### TokenRescued
+
+```solidity
+event TokenRescued(address indexed token, address indexed to, uint256 amount);
+```
+
+**Emitted**: When tokens are rescued by the owner.
 
 ## EIP-712 Implementation
 
@@ -194,7 +242,7 @@ event RelayerAuthorized(
 ```solidity
 EIP712Domain(
     string name,      // "MetaTxGateway"
-    string version,   // "2"
+    string version,   // "1"
     uint256 chainId,  // Network chain ID
     address verifyingContract // Contract address
 )
@@ -204,8 +252,18 @@ EIP712Domain(
 
 ```solidity
 MetaTransaction(
+    address to,
+    uint256 value,
+    bytes data
+)
+```
+
+### Batch MetaTransactions Type
+
+```solidity
+MetaTransactions(
     address from,
-    bytes metaTxData,
+    MetaTransaction[] metaTxs,
     uint256 nonce,
     uint256 deadline
 )
@@ -216,15 +274,20 @@ MetaTransaction(
 ```javascript
 const domain = {
     name: 'MetaTxGateway',
-    version: '2',
+    version: '1',
     chainId: await web3.eth.getChainId(),
     verifyingContract: contractAddress
 };
 
 const types = {
     MetaTransaction: [
+        { name: 'to', type: 'address' },
+        { name: 'value', type: 'uint256' },
+        { name: 'data', type: 'bytes' }
+    ],
+    MetaTransactions: [
         { name: 'from', type: 'address' },
-        { name: 'metaTxData', type: 'bytes' },
+        { name: 'metaTxs', type: 'MetaTransaction[]' },
         { name: 'nonce', type: 'uint256' },
         { name: 'deadline', type: 'uint256' }
     ]
@@ -232,7 +295,7 @@ const types = {
 
 const value = {
     from: userAddress,
-    metaTxData: encodedMetaTxs,
+    metaTxs: metaTxsArray, // Array of {to, value, data}
     nonce: await contract.getNonce(userAddress),
     deadline: Math.floor(Date.now() / 1000) + 3600 // 1 hour
 };
@@ -242,63 +305,30 @@ const signature = await signer._signTypedData(domain, types, value);
 
 ## Security Considerations
 
-### Input Validation
-- All addresses are validated for zero address
-- Array lengths are checked for reasonable limits
-- Signature recovery is performed safely
-
-### Reentrancy Protection
-- Uses OpenZeppelin's ReentrancyGuard
-- External calls use try-catch for safe failure handling
-- State changes occur before external calls
-
-### Access Control
-- Owner-only functions for critical operations
-- Relayer authorization system
-- Function-level access controls
-
-### Financial Safety
-- Exact value validation prevents over/under-funding
-- Automatic refunds protect relayers from loss
-- Failed transactions don't consume user funds
-
-## Gas Optimization
-
-### Batch Processing Benefits
-- **Single Transaction**: ~150,000 gas
-- **5 Transactions (Batch)**: ~400,000 gas (80,000 per tx)
-- **Gas Savings**: 30-40% reduction per transaction in batches
-
-### Optimization Techniques
-- Efficient storage layout
-- Minimal external calls
-- Event-driven architecture
-- Optimized loops and conditionals
+- All addresses are validated for zero address.
+- Signature recovery is performed safely.
+- Uses OpenZeppelin's ReentrancyGuard and Pausable.
+- Only owner can authorize relayers and upgrades.
+- Refunds unused native tokens to users.
 
 ## Integration Examples
 
 ### Basic Meta-Transaction
 
 ```javascript
-// Prepare meta-transaction
 const metaTx = {
     to: tokenContract.address,
-    value: 0, // No ETH for ERC20 transfer
+    value: 0,
     data: tokenContract.interface.encodeFunctionData('transfer', [recipient, amount])
 };
 
-const metaTxData = ethers.utils.defaultAbiCoder.encode(
-    ['tuple(address to, uint256 value, bytes data)[]'],
-    [[metaTx]]
-);
+const metaTxs = [metaTx];
 
-// Calculate required value
-const requiredValue = await gateway.calculateRequiredValue(metaTxData);
+const requiredValue = await gateway.calculateRequiredValue(metaTxs);
 
-// Execute meta-transaction
 const tx = await gateway.executeMetaTransactions(
     userAddress,
-    metaTxData,
+    metaTxs,
     signature,
     nonce,
     deadline,
@@ -309,29 +339,23 @@ const tx = await gateway.executeMetaTransactions(
 ### Native Token Meta-Transaction
 
 ```javascript
-// Meta-transaction that sends ETH
 const metaTx = {
     to: recipientAddress,
-    value: ethers.utils.parseEther('0.1'), // Send 0.1 ETH
-    data: '0x' // Empty data for simple transfer
+    value: ethers.utils.parseEther('0.1'),
+    data: '0x'
 };
 
-const metaTxData = ethers.utils.defaultAbiCoder.encode(
-    ['tuple(address to, uint256 value, bytes data)[]'],
-    [[metaTx]]
-);
+const metaTxs = [metaTx];
 
-// Must include 0.1 ETH with the relayer transaction
-const requiredValue = await gateway.calculateRequiredValue(metaTxData);
-// requiredValue = 0.1 ETH
+const requiredValue = await gateway.calculateRequiredValue(metaTxs);
 
 const tx = await gateway.executeMetaTransactions(
     userAddress,
-    metaTxData,
+    metaTxs,
     signature,
     nonce,
     deadline,
-    { value: requiredValue } // Relayer provides 0.1 ETH
+    { value: requiredValue }
 );
 ```
 
@@ -341,3 +365,49 @@ const tx = await gateway.executeMetaTransactions(
 - **[Batch Processing](metatxgateway/batch-processing.md)** - Optimize with batches
 - **[EIP-712 Signatures](metatxgateway/eip-712-signatures.md)** - Signature implementation
 - **[API Reference](../api/metatxgateway-api.md)** - Complete function reference
+- **[DI Token](../tokenomics/di-token.md)** - Token details and governance
+- **[Token Presale](../tokenomics/token-presale.md)** - Presale participation guide
+- **[Token Staking](../tokenomics/token-staking.md)** - Staking and rewards
+- **Vesting schedule** (optional)
+- **Funds forwarding** to treasury
+
+#### Contract Interface
+
+```solidity
+function buyTokens() external payable;
+function claimTokens() external;
+function setRate(uint256 newRate) external onlyOwner;
+function setSaleActive(bool active) external onlyOwner;
+function withdrawFunds(address payable to) external onlyOwner;
+```
+
+### Token Staking
+
+The Token Staking contract allows users to lock DI tokens and earn rewards. Staking supports flexible or fixed terms, with rewards distributed in DI tokens.
+
+#### Key Features
+
+- **Stake/unstake** at any time (or after lock period)
+- **Reward calculation** based on staked amount and duration
+- **Penalty for early withdrawal** (optional)
+- **View functions** for user and pool stats
+
+#### Contract Interface
+
+```solidity
+function stake(uint256 amount) external;
+function unstake(uint256 amount) external;
+function claimRewards() external;
+function getStaked(address user) external view returns (uint256);
+function getPendingRewards(address user) external view returns (uint256);
+```
+
+## Next Steps
+
+- **[Native Token Handling](metatxgateway/native-token-handling.md)** - Deep dive into value validation
+- **[Batch Processing](metatxgateway/batch-processing.md)** - Optimize with batches
+- **[EIP-712 Signatures](metatxgateway/eip-712-signatures.md)** - Signature implementation
+- **[API Reference](../api/metatxgateway-api.md)** - Complete function reference
+- **[DI Token](./di-token.md)** - Token details and governance
+- **[Token Presale](./token-presale.md)** - Presale participation guide
+- **[Token Staking](./token-staking.md)** - Staking and rewards

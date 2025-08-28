@@ -14,7 +14,7 @@ Chainlink integration in GasCreditVault provides:
 ## Architecture
 
 ```mermaid
-graph TB
+flowchart TB
     subgraph "Chainlink Network"
         A[Oracle Nodes] --> B[Price Aggregation]
         B --> C[On-chain Feed]
