@@ -25,13 +25,6 @@
 * [Token Presale (User Guide)](tokenomics/token-presale.md)
 * [Token Staking (User Guide)](tokenomics/token-staking.md)
 
-## Integration
-* [Frontend Integration](integration/frontend-integration.md)
-* [Relayer Setup](integration/relayer-setup.md)
-* [Meta-Transaction Flow](integration/meta-transaction-flow.md)
-* [Gas Credit Management](integration/gas-credit-management.md)
-* [Wallet & UX Patterns](integration/wallet-ux.md)
-
 ## API Reference
 * [MetaTxGateway API](api/metatxgateway-api.md)
 * [GasCreditVault API](api/gascreditvault-api.md)
