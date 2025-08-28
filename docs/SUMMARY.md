@@ -5,7 +5,6 @@
 * [Quick Start](getting-started/quick-start.md)
 * [Installation](getting-started/installation.md)
 * [Requirements & Compatibility](getting-started/requirements.md)
-* [First Transaction Guide (non-technical)](getting-started/first-transaction.md)
 
 ## Smart Contracts
 * [Overview](contracts/overview.md)
