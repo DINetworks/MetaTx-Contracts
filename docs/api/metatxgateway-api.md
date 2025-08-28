@@ -1,101 +1,101 @@
-# MetaTxGateway API
+# MetaTxGateway API Reference
 
-Complete API reference for the MetaTxGateway smart contract.
+Summary of public/external functions, events and common errors for the MetaTxGateway contract version v2.0.0.
 
-## Contract Overview
+## Contract metadata
+- Name: MetaTxGateway
+- Upgrade pattern: UUPS (owner-authorized)
+- Pausable: yes (pauseWithReason / unpause)
 
-The MetaTxGateway contract enables gasless transactions through meta-transaction execution. It verifies EIP-712 signatures and executes transactions on behalf of users while supporting native token handling and batch processing.
+## Important structs
+- MetaTransaction
+  - to: address
+  - value: uint256
+  - data: bytes
+  - nonce: uint256
+  - deadline: uint256
+  - signature: bytes
 
-**Contract Address (BSC Mainnet):** `0x...` (To be updated after deployment)  
-**Contract Address (BSC Testnet):** `0x...` (To be updated after deployment)
+## Initialization
+- initialize() external
+  - Initialize the upgradeable contract (owner set via initializer).
 
-## Interface
+## Relayer management
+- setRelayerAuthorization(address relayer, bool authorized) external onlyOwner
+  - Authorize / deauthorize relayer addresses.
 
-```solidity
-interface IMetaTxGateway {
-    // Structs
-    struct MetaTransaction {
-        address to;
-        uint256 value;
-        bytes data;
-        uint256 nonce;
-        uint256 deadline;
-        bytes signature;
-    }
+- isRelayerAuthorized(address relayer) external view returns (bool)
+  - Check relayer status.
 
-    // Write Functions
-    function executeMetaTransactions(MetaTransaction[] calldata transactions) external payable;
-    function upgrade(address newImplementation) external;
+## Pause / resume
+- pauseWithReason(string calldata reason) external onlyOwner
+  - Pause contract and store a human-readable reason.
 
-    // Read Functions
-    function getNonce(address user) external view returns (uint256);
-    function name() external pure returns (string memory);
-    function version() external pure returns (string memory);
-    function domainSeparator() external view returns (bytes32);
-    function UPGRADE_INTERFACE_VERSION() external pure returns (string memory);
+- unpause() external onlyOwner
+  - Unpause contract.
 
-    // Events
-    event MetaTransactionExecuted(
-        address indexed user,
-        address indexed to,
-        bool success,
-        bytes returnData
-    );
-    event NativeTokenUsed(address indexed user, uint256 amount);
-    event Upgraded(address indexed implementation);
-}
-```
-
-## Write Functions
-
-### executeMetaTransactions
-
-Executes a batch of meta-transactions with signature verification.
-
-```solidity
-function executeMetaTransactions(
+## Core execution
+- executeMetaTransactions(
     MetaTransaction[] calldata transactions
-) external payable
-```
+  ) external payable
+  - Executes a batch of meta-transactions with signature verification.
+  - Validations:
+    - Signature verified via EIP‑712 using domain (name: "MetaTxGateway", version: "2.0.0").
+    - Nonce must equal `nonces[from]`.
+    - Deadline must not be expired.
+    - If msg.value > 0, msg.value must equal sum(metaTx.value).
+  - Behavior:
+    - Each metaTx is executed with try/catch; failures do not revert the entire batch.
+    - Tracks value used; refunds unused native tokens to `from`.
+    - Increments `nonces[from]` on success path.
+  - Returns an array of booleans indicating per-transaction success.
 
-**Parameters:**
-- `transactions`: Array of meta-transaction structures to execute
+## Helpers & view functions
+- calculateRequiredValue(MetaTransaction[] calldata metaTxs) external pure returns (uint256 totalValue)
+  - Sum of metaTx.value.
 
-**MetaTransaction Structure:**
-```solidity
-struct MetaTransaction {
-    address to;        // Target contract address
-    uint256 value;     // ETH/BNB value to send (wei)
-    bytes data;        // Transaction data (function call)
-    uint256 nonce;     // User's nonce (must be sequential)
-    uint256 deadline;  // Expiration timestamp (Unix time)
-    bytes signature;   // EIP-712 signature from user
-}
-```
+- getNonce(address user) external view returns (uint256 currentNonce)
+  - Returns current nonce for `user`.
 
-**Payable:** Yes - Include native tokens when transactions require them
+- name() external pure returns (string memory)
+  - Returns "MetaTxGateway"
 
-**Access Control:** Public (anyone can submit valid meta-transactions)
+- version() external pure returns (string memory)
+  - Returns "2.0.0"
 
-**Gas Limit:** No specific limit, but consider batch size and gas costs
+- domainSeparator() external view returns (bytes32)
+  - Returns EIP‑712 domain separator used to compute digest.
 
-**Events Emitted:**
-- `MetaTransactionExecuted` - For each transaction in the batch
-- `NativeTokenUsed` - If native tokens are included
+- UPGRADE_INTERFACE_VERSION() external pure returns (string memory)
+  - Returns "5.0.0"
 
-**Errors:**
-- `InvalidSignature()` - Signature verification failed
-- `ExpiredDeadline()` - Transaction deadline exceeded  
-- `InvalidNonce()` - Nonce doesn't match expected value
-- `ExecutionFailed()` - Target transaction reverted
+## Events
+- event MetaTransactionExecuted(address indexed user, address indexed to, bool success, bytes returnData)
+- event NativeTokenUsed(address indexed user, uint256 amount)
+- event Upgraded(address indexed implementation)
+- event RelayerAuthorized(address indexed relayer, bool authorized)
+- event PausedWithReason(string reason)
+- event TokenRescued(address indexed token, address indexed to, uint256 amount)
 
-**Example Usage:**
-```javascript
-const transactions = [
-  {
-    to: "0x742d35Cc6635C0532925a3b8D624Afce0c31a7f4",
-    value: ethers.parseEther("0.1"),
-    data: "0xa9059cbb000000000000000000000000742d35cc6635c0532925a3b8d624afce0c31a7f4000000000000000000000000000000000000000000000000016345785d8a0000",
+## Common error strings (revert reasons)
+- "Invalid relayer address"
+- "Unauthorized relayer"
+- "Transaction expired"
+- "Invalid nonce"
+- "Invalid signature"
+- "Empty batch Txs"
+- "Incorrect native token amount"
+- "Refund failed"
+- "Only self-calls allowed"
+- "Already paused"
+- "Not paused"
+- "Invalid address"
+
+## Notes & integration tips
+- Frontends should use `_signTypedData` with domain version "2.0.0" and the MetaTransactions type (array of MetaTransaction).
+- Always call calculateRequiredValue(metaTxs) to compute exact msg.value for relayer transaction.
+- Relayers must be authorized by owner to call executeMetaTransactions.
+- Monitor NativeTokenUsed events for refunds and accounting.
     nonce: 1,
     deadline: 1640995200,
     signature: "0x..."

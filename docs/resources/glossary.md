@@ -1,24 +1,24 @@
 # Glossary
 
-Comprehensive glossary of terms used in MetaTx-Contracts documentation and codebase.
+Meta-transaction (MetaTx) — A signed instruction allowing a relayer to execute a transaction on a user's behalf.  
+Relayer — A service or address that submits user-signed meta-transactions and pays gas.  
+EIP-712 — Ethereum typed structured data signing standard used for secure signatures.  
+Domain Separator — EIP-712 domain hash including name, version, chainId and contract address.  
+Gas credit — Off-chain or on-chain mechanism for paying relayer fees via credits/tokens.  
+DI Token — Platform ERC20 token used for governance, staking, and rewards.  
+Nonce — Replay protection counter per user in MetaTxGateway.  
+UUPS — Upgradeable proxy pattern used for safe contract upgrades.  
+ReentrancyGuard — Protection against reentrancy attacks.  
+Batch — An array of MetaTransaction executed in a single call.
 
-## A
+---
 
-### Access Control
-A security mechanism that restricts who can perform certain operations on smart contracts. MetaTx-Contracts uses role-based access control (RBAC) for administrative functions.
+**Note**: This glossary covers terms specific to MetaTx-Contracts and general blockchain development. For more detailed explanations of any term, refer to the relevant sections in this documentation or the external resources mentioned above.
 
-### ABI (Application Binary Interface)
-A JSON format that describes how to interact with smart contracts, including function signatures, parameters, and return types.
+**Last Updated**: Aug 2025  
+**Version**: 1.0.0
 
-### Aggregator
-In the context of Chainlink, an aggregator is a smart contract that collects price data from multiple oracle nodes and provides a single, reliable price feed.
-
-### API Key
-A unique identifier used to authenticate requests to the relayer service. Required for submitting meta-transactions through the relayer API.
-
-## B
-
-### Batch Processing
+For suggestions or corrections to this glossary, please open an issue on our [GitHub repository](https://github.com/DINetworks/MetaTx-Contracts/issues) or contact us at docs@metatx-contracts.com.
 The ability to execute multiple transactions atomically in a single blockchain transaction. MetaTx-Contracts supports batching up to 10 meta-transactions.
 
 ### BSC (Binance Smart Chain)

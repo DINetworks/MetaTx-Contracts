@@ -359,6 +359,15 @@ const tx = await gateway.executeMetaTransactions(
 );
 ```
 
+## Deployed Contracts
+
+- MetaTxGateway (deployed)  
+  Chains: Mainnet, BSC, Base, Polygon, Optimism, Arbitrum, Avalanche  
+  Address: 0xbee9591415128F7d52279C8df327614d8fD8a9b2
+
+- GasCreditVault (BSC)  
+  Address: 0x0A4467D2D63dB133eC34162Ca0f738948d40A28c
+
 ## Next Steps
 
 - **[Native Token Handling](metatxgateway/native-token-handling.md)** - Deep dive into value validation

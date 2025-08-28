@@ -19,14 +19,12 @@
   * [Multi-Token Support](contracts/gascreditvault/multi-token-support.md)
   * [Chainlink Integration](contracts/gascreditvault/chainlink-integration.md)
   * [Credit Management](contracts/gascreditvault/credit-management.md)
-* [DI Token (Contract)](contracts/di-token/README.md)
+* [DI Token (Contract)](tokenomics/di-token.md)
 
 ## Tokenomics
 * [DI Token (User Guide)](tokenomics/di-token.md)
 * [Token Presale (User Guide)](tokenomics/token-presale.md)
 * [Token Staking (User Guide)](tokenomics/token-staking.md)
-* [Distribution & Vesting](tokenomics/distribution-vesting.md)
-* [Economics Summary (non-technical)](tokenomics/summary.md)
 
 ## Integration
 * [Frontend Integration](integration/frontend-integration.md)
@@ -38,6 +36,7 @@
 ## API Reference
 * [MetaTxGateway API](api/metatxgateway-api.md)
 * [GasCreditVault API](api/gascreditvault-api.md)
+* [Relayer API Reference](api/relayer-api.md)
 * [Events Reference](api/events-reference.md)
 * [Error Codes](api/error-codes.md)
 
@@ -46,14 +45,6 @@
 * [Example dApp: Batch DeFi Swap](examples/batch-defi-swap.md)
 * [Scripts & Tooling](examples/scripts.md)
 * [Testing Examples](examples/testing-examples.md)
-
-## Guides
-* [Security Best Practices](guides/security-best-practices.md)
-* [Gas Optimization](guides/gas-optimization.md)
-* [Troubleshooting](guides/troubleshooting.md)
-* [Testing Guide](guides/testing-guide.md)
-* [Deployment Guide (Mainnet)](deployment/deployment-guide.md)
-* [Governance Guide](guides/governance.md)
 
 ## Advanced Topics
 * [Architecture Design](advanced/architecture-design.md)

@@ -1,28 +1,28 @@
 # Release Notes
 
-## Version 2.0.0 (Current) - December 2024
+This page tracks releases, notable changes, and upgrade notes for MetaTx-Contracts.
 
-### 🎉 Major Release - Enhanced Meta-Transaction Gateway
+## Latest release
+- Version: v1.0.0-native-token-support
+- Date: YYYY-MM-DD
+- Highlights:
+  - MetaTxGateway: batch meta-transactions with native token support, refunds, and pause/relayer controls
+  - DI Token: ERC20 with allocation and staking integration
+  - GasCreditVault: BSC deployment for gas credits
 
-This major release introduces significant enhancements to the MetaTx-Contracts system, focusing on native token support, improved security, and better developer experience.
+## Changelog (sample)
+### v1.0.0-native-token-support
+- Added EIP-712 batch signing support (MetaTransactions)
+- Implemented native-token validation and automatic refunds
+- Added relayer authorization and pauseWithReason
+- UUPS upgradeable proxy pattern
 
-#### ✨ New Features
+### v0.x.y
+- [add older entries as needed]
 
-**Native Token Support**
-- **ETH/BNB Integration**: Meta-transactions can now include native token transfers
-- **Automatic Handling**: System automatically manages native token transfers alongside contract calls
-- **Payable Gateway**: MetaTxGateway contract now supports payable meta-transactions
-- **Event Tracking**: New `NativeTokenUsed` event for tracking native token usage
-
-**Enhanced Batch Processing**
-- **Improved Efficiency**: Optimized batch execution with better gas management
-- **Mixed Transactions**: Support for batches containing both native token and contract calls
-- **Better Error Handling**: Individual transaction failures don't affect entire batch
-- **Gas Estimation**: More accurate gas estimation for batch operations
-
-**Advanced Security**
-- **EIP-712 v2**: Updated domain separator for enhanced security
-- **Signature Validation**: Improved signature verification with better error messages
+## Upgrade Notes
+- When upgrading MetaTxGateway via UUPS, ensure _authorizeUpgrade is invoked by owner and follow proxy admin checks.
+- Review domain separator version in EIP-712 if you change the version field.
 - **Deadline Enforcement**: Stricter deadline validation with configurable limits
 - **Access Control**: Enhanced permission system for administrative functions
 
@@ -72,7 +72,7 @@ contract MetaTxGateway {
 ```javascript
 const domain = {
   name: "MetaTxGateway",
-  version: "2.0.0", // Updated from 1.0.0
+  version: "1",
   chainId: 56,
   verifyingContract: "0x..."
 };

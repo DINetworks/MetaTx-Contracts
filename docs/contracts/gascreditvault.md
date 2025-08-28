@@ -678,6 +678,10 @@ function initialize(
 4. Test with small amounts
 5. Monitor for the first 24 hours
 
+## Deployed Address
+
+- BSC: 0x0A4467D2D63dB133eC34162Ca0f738948d40A28c
+
 ---
 
 **Next Steps**: 
