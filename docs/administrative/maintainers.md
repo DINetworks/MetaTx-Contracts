@@ -9,7 +9,7 @@ Responsibilities
 - Coordinate governance and upgrades
 
 Contact / Maintainers
-- Primary maintainer: team@dinetworks.example (replace with actual contact)
+- Primary maintainer: team@dinetwork.tech
 - GitHub organization: DINetworks
 
 If you want to become a maintainer, open an issue outlining your contributions and area of ownership.

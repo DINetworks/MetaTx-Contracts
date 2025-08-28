@@ -3,7 +3,7 @@
 If you discover a vulnerability, please follow these steps:
 
 1. Do not publicize the issue.
-2. Send a detailed report to: security@dinetworks.example (replace with actual email).
+2. Send a detailed report to: security@dinetwork.tech
 3. Include reproduction steps, impact assessment, and suggested mitigation.
 4. If you prefer encrypted communication, provide your PGP key; our public key will be posted here.
 

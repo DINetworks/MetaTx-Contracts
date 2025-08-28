@@ -4,7 +4,7 @@ This page tracks releases, notable changes, and upgrade notes for MetaTx-Contrac
 
 ## Latest release
 - Version: v1.0.0-native-token-support
-- Date: YYYY-MM-DD
+- Date: 2025-08-25
 - Highlights:
   - MetaTxGateway: batch meta-transactions with native token support, refunds, and pause/relayer controls
   - DI Token: ERC20 with allocation and staking integration
@@ -16,9 +16,6 @@ This page tracks releases, notable changes, and upgrade notes for MetaTx-Contrac
 - Implemented native-token validation and automatic refunds
 - Added relayer authorization and pauseWithReason
 - UUPS upgradeable proxy pattern
-
-### v0.x.y
-- [add older entries as needed]
 
 ## Upgrade Notes
 - When upgrading MetaTxGateway via UUPS, ensure _authorizeUpgrade is invoked by owner and follow proxy admin checks.
@@ -284,21 +281,7 @@ This initial release provides the foundation for future enhancements:
 
 ## Upcoming Releases
 
-### Version 2.1.0 (Q1 2025) - Multi-Chain Support
-
-**Planned Features**
-- **Ethereum Mainnet**: Full Ethereum support with EIP-1559
-- **Polygon**: Layer 2 scaling with low fees
-- **Arbitrum**: Optimistic rollup integration
-- **Cross-chain Credits**: Transfer credits between chains
-
-**Technical Improvements**
-- **Universal SDK**: Single SDK for all supported chains
-- **Chain Abstraction**: Automatic chain detection and switching
-- **Unified Pricing**: Cross-chain price normalization
-- **Bridge Integration**: Seamless asset bridging
-
-### Version 2.2.0 (Q2 2025) - Advanced Features
+### Version 1.1.0 (Q4 2025) - Advanced Features
 
 **New Capabilities**
 - **Gasless Approvals**: EIP-2612 permit integration
@@ -312,12 +295,11 @@ This initial release provides the foundation for future enhancements:
 - **Webhook System**: Real-time event notifications
 - **Analytics Dashboard**: Usage metrics and insights
 
-### Version 3.0.0 (Q3 2025) - Ecosystem Integration
+### Version 3.0.0 (Q1 2026) - Ecosystem Integration
 
 **Platform Features**
 - **DeFi Integration**: Direct DEX and lending protocol support
 - **NFT Marketplace**: Gasless NFT trading
-- **Gaming SDK**: Game-specific meta-transaction tools
 - **Social Features**: Gasless social interactions
 
 **Enterprise Features**
@@ -333,9 +315,8 @@ This initial release provides the foundation for future enhancements:
 ### Community Channels
 
 - **GitHub**: [Issues and Discussions](https://github.com/DINetworks/MetaTx-Contracts)
-- **Discord**: [Community Chat](https://discord.gg/metatx-contracts)
-- **Telegram**: [Development Updates](https://t.me/metatx_contracts)
-- **Twitter**: [@MetaTxContracts](https://twitter.com/MetaTxContracts)
+- **Discord**: [Community Chat](https://discord.gg/di-networks)
+- **Telegram**: [Development Updates](https://t.me/di_networks)
 
 ### Getting Help
 
