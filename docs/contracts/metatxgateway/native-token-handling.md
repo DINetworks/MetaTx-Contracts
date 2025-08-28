@@ -89,15 +89,6 @@ Native token handling adds gas overhead:
 
 Plan your gas limits accordingly when using native token features.
 
-## Error Handling
-
-```solidity
-error InsufficientNativeBalance(uint256 required, uint256 available);
-error ValueTransferFailed(address to, uint256 amount);
-error InvalidValueAmount(uint256 amount);
-error NativeTokenNotSupported();
-error RefundFailed(address recipient, uint256 amount);
-```
 
 ---
 

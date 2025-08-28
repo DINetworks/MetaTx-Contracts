@@ -66,23 +66,19 @@ Edit `.env` with your configuration:
 
 ```env
 # Private key for deployment (without 0x prefix)
-PRIVATE_KEY=your_private_key_here
+PRIVATE_KEY=
+RELAYER_PRIVATE_KEY=
 
-# API keys for contract verification
-BSCSCAN_API_KEY=your_bscscan_api_key
-ETHERSCAN_API_KEY=your_etherscan_api_key
-POLYGONSCAN_API_KEY=your_polygonscan_api_key
-
-# RPC URLs (optional - defaults provided)
-BSC_RPC_URL=https://bsc-dataseed1.binance.org/
-ETHEREUM_RPC_URL=https://mainnet.infura.io/v3/your_infura_key
+MAINNET_RPC_URL=https://mainnet.gateway.tenderly.co
+SEPOLIA_RPC_URL=https://ethereum-sepolia-rpc.publicnode.com/
+BSC_RPC_URL=https://bsc-dataseed.binance.org/
 POLYGON_RPC_URL=https://polygon-rpc.com/
+BASE_RPC_URL=https://mainnet.base.org/
+OPTIMISM_RPC_URL=https://optimism-rpc.publicnode.com/
+ARBITRUM_RPC_URL=https://arbitrum-one-rpc.publicnode.com/
+AVALANCHE_RPC_URL=https://avalanche-c-chain-rpc.publicnode.com/
 
-# Deployed contract addresses (fill after deployment)
-METATX_GATEWAY_PROXY=
-METATX_GATEWAY_IMPLEMENTATION=
-GAS_CREDIT_VAULT_PROXY=
-GAS_CREDIT_VAULT_IMPLEMENTATION=
+ETHERSCAN_API_KEY=
 ```
 
 {% hint style="warning" %}

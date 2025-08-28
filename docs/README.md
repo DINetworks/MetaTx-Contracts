@@ -1,4 +1,4 @@
-![DI Protocol](DI-banner.jpg)
+![DI Protocol](di-banner.jpg)
 # MetaTx-Contracts Documentation
 
 ## 🚀 Gasless Meta-Transaction System with Native Token Support

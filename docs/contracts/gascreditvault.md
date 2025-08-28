@@ -540,90 +540,6 @@ class GasCreditVaultClient {
 }
 ```
 
-### Backend Integration
-
-```javascript
-const { ethers } = require('ethers');
-
-class VaultManager {
-    constructor(provider, privateKey) {
-        this.provider = provider;
-        this.wallet = new ethers.Wallet(privateKey, provider);
-        this.vault = new ethers.Contract(
-            process.env.VAULT_ADDRESS,
-            GasCreditVaultABI,
-            this.wallet
-        );
-    }
-    
-    async monitorDeposits() {
-        this.vault.on('CreditsDeposited', (user, token, amount, credits, event) => {
-            console.log(`Credits deposited: ${credits} for user ${user}`);
-            // Update database, send notifications, etc.
-        });
-    }
-    
-    async checkUserBalance(userAddress) {
-        try {
-            const balance = await this.vault.getCreditBalance(userAddress);
-            return ethers.utils.formatUnits(balance, 18);
-        } catch (error) {
-            console.error('Error checking balance:', error);
-            throw error;
-        }
-    }
-}
-```
-
-## Testing
-
-### Unit Tests
-
-```javascript
-describe('GasCreditVault', function() {
-    let vault, token, oracle, owner, user;
-    
-    beforeEach(async function() {
-        [owner, user] = await ethers.getSigners();
-        
-        // Deploy mock contracts
-        const MockToken = await ethers.getContractFactory('MockERC20');
-        token = await MockToken.deploy('Test Token', 'TEST', 18);
-        
-        const MockOracle = await ethers.getContractFactory('MockAggregatorV3');
-        oracle = await MockOracle.deploy(8, 100000000); // $1.00
-        
-        // Deploy vault
-        const GasCreditVault = await ethers.getContractFactory('GasCreditVault');
-        vault = await GasCreditVault.deploy();
-        await vault.initialize(owner.address);
-        
-        // Add supported token
-        await vault.addSupportedToken(
-            token.address,
-            oracle.address,
-            ethers.utils.parseEther('1000'), // max deposit
-            ethers.utils.parseEther('1')     // min deposit
-        );
-    });
-    
-    it('Should deposit credits correctly', async function() {
-        const amount = ethers.utils.parseEther('100');
-        
-        // Mint and approve tokens
-        await token.mint(user.address, amount);
-        await token.connect(user).approve(vault.address, amount);
-        
-        // Deposit
-        await vault.connect(user).depositCredits(token.address, amount);
-        
-        // Check balance
-        const credits = await vault.getCreditBalance(user.address);
-        expect(credits).to.equal(ethers.utils.parseEther('100')); // 1:1 ratio at $1
-    });
-});
-```
-
 ## Best Practices
 
 ### For Developers
@@ -641,42 +557,6 @@ describe('GasCreditVault', function() {
 3. **Be aware of price volatility** affecting credit values
 4. **Keep some buffer credits** for unexpected gas spikes
 5. **Use batch operations** when depositing multiple tokens
-
-### For Operators
-
-1. **Monitor price feeds** for staleness or anomalies
-2. **Set appropriate daily limits** to prevent large losses
-3. **Regular security audits** of price calculation logic
-4. **Emergency procedures** for pausing the system
-5. **Keep admin keys secure** with multi-signature wallets
-
-## Deployment Considerations
-
-### Constructor Parameters
-
-```solidity
-function initialize(
-    address admin,
-    address gateway,
-    uint256 priceStaleThreshold,
-    uint256 maxDailyWithdrawal
-) external initializer {
-    _grantRole(DEFAULT_ADMIN_ROLE, admin);
-    _grantRole(ADMIN_ROLE, admin);
-    _grantRole(GATEWAY_ROLE, gateway);
-    
-    priceStaleThreshold = priceStaleThreshold;
-    maxDailyWithdrawal = maxDailyWithdrawal;
-}
-```
-
-### Post-Deployment Setup
-
-1. Add supported tokens with price feeds
-2. Set appropriate deposit limits
-3. Configure access roles
-4. Test with small amounts
-5. Monitor for the first 24 hours
 
 ## Deployed Address
 
