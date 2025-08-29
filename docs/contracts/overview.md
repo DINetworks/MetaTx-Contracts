@@ -76,7 +76,7 @@ flowchart TB
 ### Security Model
 
 ```mermaid
-graph LR
+flowchart LR
     A[User Signature] --> B[EIP-712 Verification]
     B --> C[Nonce Validation]
     C --> D[Relayer Authorization]

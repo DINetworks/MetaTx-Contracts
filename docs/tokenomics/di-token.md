@@ -81,6 +81,16 @@ function totalSupply() external view returns (uint256);
 function balanceOf(address account) external view returns (uint256);
 ```
 
+## Deployed Addresses (BNB Smart Chain)
+
+| Contract Name     | Address                                      |
+|-------------------|----------------------------------------------|
+| DI Token          | 0xBE13AaeCf1f68f4AC7e94391ABC29747De51BBDC   |
+| DIVote            | 0x397629bBFbaE39c9fe1aF62347aF8fd7278BB2cb   |
+| TokenAirdrop      | 0x5f1DE17f53aDe921C8832D0Fa28F06C13dfc3d16   |
+| TokenPresale      | 0x925c5175331ba07c8F91234C0214348fEC8A248A   |
+| TokenStaking      | 0x5cE964707AaBf798998EE357bC077B70DDf6D3cA   |
+
 ## Learn More
 
 - [Token Presale](../../tokenomics/token-presale.md)

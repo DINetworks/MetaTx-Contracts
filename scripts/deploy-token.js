@@ -10,10 +10,10 @@ const artifactsDIStaking = require('../artifacts/contracts/TokenStaking.sol/Toke
 
 dotenv.config()
 
-const marketingWallet = '0x70997970C51812dc3A010C7d01b50e0d17dc79C8'
-const treasuryWallet = '0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC'
-const ecosystemWallet = '0x90F79bf6EB2c4f870365E785982E1f101E93b906'
-const liquidityWallet = '0x15d34AAf54267DB7D7c367839AAf71A00a2C6A65'
+const marketingWallet = '0x0a8Fd4834BA2eceb5A972a3111a88C77e431a220'
+const treasuryWallet = '0x4845719497Ed89f804Ee62127175aB83CFd8D846'
+const ecosystemWallet = '0xacE3B89f892D42215cdb74fa5c1BC497aDb537cF'
+const liquidityWallet = '0x661108BF2D665a66Cc0426c4d23CFB0f992c5747'
 
 const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000'
 
