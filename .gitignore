@@ -15,3 +15,9 @@ node_modules
 
 # Hardhat Ignition default folder for deployments against a local node
 ignition/deployments/chain-31337
+
+WHITEPAPER.md
+WHITEPAPER_PDF.html
+README_PDF.md
+DI_Protocol_Whitepaper.pdf
+generate-pdf.js
