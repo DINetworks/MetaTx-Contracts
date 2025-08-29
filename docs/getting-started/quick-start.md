@@ -102,7 +102,7 @@ You'll see deployment information:
 
 🔍 Verifying deployment...
 👤 Owner: 0x742d35Cc6634C0532925a3b8E3c03e1B65b0c4EA
-📝 Version: v2.0.0-native-token-support
+📝 Version: v1.0.0-native-token-support
 ✅ Owner correctly set to deployer
 ✅ Relayer authorization test passed
 

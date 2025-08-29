@@ -1,6 +1,6 @@
 # MetaTxGateway API Reference
 
-Summary of public/external functions, events and common errors for the MetaTxGateway contract version v2.0.0.
+Summary of public/external functions, events and common errors for the MetaTxGateway contract version v1.0.0.
 
 ## Contract metadata
 - Name: MetaTxGateway
@@ -651,7 +651,7 @@ class MetaTxGatewayTestHelper {
 
 ## Migration Guide
 
-### From v1.0.0 to v2.0.0
+### From v1.0.0 to v1.0.0
 
 **Key Changes:**
 1. Domain version updated to "2.0.0"
@@ -677,7 +677,7 @@ if (hasNativeValue) {
 ```
 
 {% hint style="warning" %}
-**Breaking Change**: Signatures created with domain version "1.0.0" will not work with v2.0.0 contracts. Update your signing code to use version "2.0.0".
+**Breaking Change**: Signatures created with domain version "1.0.0" will not work with v1.0.0 contracts. Update your signing code to use version "2.0.0".
 {% endhint %}
 
 ## Support

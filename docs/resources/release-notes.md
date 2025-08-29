@@ -98,7 +98,7 @@ const domain = {
    // Old v1.0.0 address
    const oldGateway = "0x..."; 
    
-   // New v2.0.0 address
+   // New v1.0.0 address
    const newGateway = "0x...";
    ```
 
@@ -150,7 +150,7 @@ const domain = {
 
 #### 🚨 Breaking Changes
 
-1. **Domain Separator Version**: Signatures from v1.0.0 will not work with v2.0.0
+1. **Domain Separator Version**: Signatures from v1.0.0 will not work with v1.0.0
 2. **Contract Address**: New deployment address for enhanced contract
 3. **Event Structure**: Some events have additional parameters
 4. **Gas Requirements**: Minimum gas requirements updated for new features

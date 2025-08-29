@@ -27,7 +27,7 @@ flowchart TB
 
 ## Core Contracts
 
-### 🔄 MetaTxGateway v2.0.0
+### 🔄 MetaTxGateway v1.0.0
 
 **Purpose**: Execute meta-transactions on behalf of users with native token support
 

@@ -698,7 +698,7 @@ const helpers = {
 
 ## Migration Guide
 
-### From v1.0.0 to v2.0.0
+### From v1.0.0 to v1.0.0
 
 **Breaking Changes:**
 1. Updated domain separator version
