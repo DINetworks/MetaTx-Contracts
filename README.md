@@ -230,6 +230,10 @@ For questions and support:
 - **Token Contracts**: ✅ DI ecosystem ready
 - **BSCScan Verification**: ✅ Standard JSON Input support
 
+## Security Reivew
+- **Internal Review**: Completed
+- **External Audit**: Completed [AuditAgent Security Review Report](./audits/final_audit_agent_report_6a849e18-a8ae-4182-b097-047435acc365.pdf)
+
 ---
 
 **Built with ❤️ for gasless DeFi experiences**

@@ -171,7 +171,7 @@ const domain = {
 
 #### 🔐 Security
 
-- **Audit Status**: Security audit completed by [Audit Firm]
+- **Audit Status**: Security audit completed by AuditAgent [AuditAgent Security Review Report](../../audits/final_audit_agent_report_6a849e18-a8ae-4182-b097-047435acc365.pdf)
 - **Bug Bounty**: Active bug bounty program with up to $10,000 rewards
 - **Formal Verification**: Critical functions formally verified
 - **Insurance**: Smart contract insurance coverage active

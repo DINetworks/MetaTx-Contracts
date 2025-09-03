@@ -54,7 +54,8 @@
 
 - **BSCScan Verification**: ✅ Ready (Standard JSON Input)
 - **Source Code**: Fully open source under MIT License
-- **Audit Status**: Internal review completed
+- **Audit Status**: Internal and External review completed[AuditAgent Security Review Report](./audits/final_audit_agent_report_6a849e18-a8ae-4182-b097-047435acc365.pdf)
+
 
 ### 📋 Supported Networks
 
