@@ -42,7 +42,6 @@ flowchart TB
 
 ```solidity
 mapping(address => uint256) public credits;
-mapping(address => mapping(address => uint256)) public creditsInToken;
 ```
 
 ## Credit Operations

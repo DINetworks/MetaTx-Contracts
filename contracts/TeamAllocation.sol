@@ -16,15 +16,14 @@ contract TeamAllocation is Ownable {
 
     uint256 public constant VESTING_DURATION = 180 days;
     uint256 public constant CLIFF_DURATION = 30 days;
-    uint256 private constant NOT_FOUND = type(uint256).max;
 
     address[] public wallets;
-    Member[] public membersInfo;
-
+    mapping(address => Member) private membersInfo;
+    
     uint256 public totalAllocated;
     uint256 public totalWithdrawn;
 
-    constructor(address _token, address _owner) Ownable(_owner) {
+    constructor(address _token, address owner_) Ownable(owner_) {
         token = IERC20(_token);
     }
 
@@ -38,35 +37,36 @@ contract TeamAllocation is Ownable {
             "Mismatched input lengths"
         );
 
-        for (uint256 i = 0; i < _wallets.length; ++i) {
+        uint256 walletsLength = _wallets.length;
+        for (uint256 i = 0; i < walletsLength; ++i) {
+            // prevent adding the same wallet twice (startTime == 0 means not allocated)
+            require(membersInfo[_wallets[i]].startTime == 0, "Duplicate wallet");
+
             wallets.push(_wallets[i]);
-            membersInfo.push(Member({
+            membersInfo[_wallets[i]] = Member({
                 name: names[i],
                 balance: amounts[i],
                 startTime: block.timestamp,
                 withdrawn: 0
-            }));
+            });
             totalAllocated += amounts[i];
         }
     }
 
     function withdraw() external {
-        uint256 index = getMemberIndex(msg.sender);
-        require(index != NOT_FOUND, "No Member wallet");
-
-        Member storage member = membersInfo[index];
+        require(membersInfo[msg.sender].startTime != 0, "No Member wallet");
+        Member memory member = membersInfo[msg.sender];
         uint256 withdrawable = calculateWithdrawable(member);
         require(withdrawable > 0, "Nothing to withdraw");
-
-        member.withdrawn += withdrawable;
+        // update storage after computing withdrawable
+        membersInfo[msg.sender].withdrawn += withdrawable;
         totalWithdrawn += withdrawable;
         token.transfer(msg.sender, withdrawable);
     }
 
     function getWithdrawable() external view returns (uint256) {
-        uint256 index = getMemberIndex(msg.sender);
-        require(index != NOT_FOUND, "No Member wallet");
-        return calculateWithdrawable(membersInfo[index]);
+        require(membersInfo[msg.sender].startTime != 0, "No Member wallet");
+        return calculateWithdrawable(membersInfo[msg.sender]);
     }
 
     function calculateWithdrawable(Member memory member) internal view returns (uint256) {
@@ -90,21 +90,18 @@ contract TeamAllocation is Ownable {
 
         return vested - member.withdrawn;
     }
-
-    function getMemberIndex(address wallet) internal view returns (uint256) {
-        for (uint256 i = 0; i < wallets.length; ++i) {
-            if (wallets[i] == wallet) return i;
-        }
-        return NOT_FOUND;
+    
+    function getMembers() external view returns (address[] memory) {
+        return wallets;
     }
 
+    
     function getMemberCount() external view returns (uint256) {
         return wallets.length;
     }
 
     function getMember(address wallet) external view returns (Member memory) {
-        uint256 index = getMemberIndex(wallet);
-        require(index != NOT_FOUND, "No Member wallet");
-        return membersInfo[index];
+        require(membersInfo[wallet].startTime != 0, "No Member wallet");
+        return membersInfo[wallet];
     }
 }

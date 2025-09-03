@@ -19,7 +19,14 @@ contract TokenPresale is Ownable, ReentrancyGuard {
     uint256 constant baseRatePerUSD = 20; // 20 sale tokens per $1
     uint256 public startTimestamp;
     uint256 public endTimestamp;
+    // Maximum allowed age (in seconds) for oracle price data
+    uint256 public maxPriceAge = 1 hours;
+    
+    event MaxPriceAgeUpdated(uint256);
+
     event SaleWindowUpdated(uint256, uint256);
+
+    event PaymentTokenAdded(address token, address priceFeed, uint8 decimals, bool isStable);
 
     struct PaymentToken {
         address token;
@@ -33,7 +40,7 @@ contract TokenPresale is Ownable, ReentrancyGuard {
 
     event Purchased(address indexed buyer, address indexed payToken, uint256 payAmount, uint256 tokenAmount);
 
-    constructor(address _saleToken, uint256 _totalForSale, address _owner) Ownable(_owner) {
+    constructor(address _saleToken, uint256 _totalForSale, address owner_) Ownable(owner_) {
         saleToken = IERC20(_saleToken);
         totalTokensForSale = _totalForSale;
     }
@@ -54,6 +61,12 @@ contract TokenPresale is Ownable, ReentrancyGuard {
         startTimestamp = _start;
         endTimestamp = _end;
         emit SaleWindowUpdated(_start, _end);
+    }    
+
+    function setMaxPriceAge(uint256 _seconds) external onlyOwner {
+        require(_seconds > 0, "Invalid age");
+        maxPriceAge = _seconds;
+        emit MaxPriceAgeUpdated(_seconds);
     }
 
     function addPaymentToken(
@@ -69,6 +82,7 @@ contract TokenPresale is Ownable, ReentrancyGuard {
             isStable: isStable,
             isAllowed: true
         });
+        emit PaymentTokenAdded(token, priceFeed, decimals, isStable);
     }
 
     function getTokenPriceInUSD(address token) public view returns (uint256) {
@@ -76,10 +90,20 @@ contract TokenPresale is Ownable, ReentrancyGuard {
         if (paymentTokens[token].isStable) {
             return 1e8;
         }
-        
-        (, int256 price,,,) = AggregatorV3Interface(paymentTokens[token].priceFeed).latestRoundData();
+        address feed = paymentTokens[token].priceFeed;
+        require(feed != address(0), "Missing price feed");
+
+        (uint80 roundId, int256 price, , uint256 updatedAt, uint80 answeredInRound) =
+            AggregatorV3Interface(feed).latestRoundData();
+
         require(price > 0, "Invalid price");
-        
+        require(updatedAt != 0, "Round not complete");
+        // answeredInRound must be >= roundId to ensure the answer is for this round
+        require(answeredInRound >= roundId, "Stale answeredInRound");
+        // timestamp sanity checks
+        require(updatedAt <= block.timestamp, "Oracle timestamp in future");
+        require(block.timestamp - updatedAt <= maxPriceAge, "Price too old");
+
         return uint256(price); // 8 decimals typically
     }
 
@@ -112,11 +136,12 @@ contract TokenPresale is Ownable, ReentrancyGuard {
         require(tokensSold + tokenAmount <= totalTokensForSale, "Exceeds sale supply");
     }
 
-    function buyTokens(address payToken, uint256 amountIn) external nonReentrant saleActive {
+    function buyTokens(address payToken, uint256 amountIn, uint256 minTokensOut) external nonReentrant saleActive {
         require(paymentTokens[payToken].isAllowed, "Unsupported payment token");
         require(amountIn > 0, "Invalid amount");
 
         uint256 tokenAmount = calculateTokenAmount(payToken, amountIn);
+        require(tokenAmount >= minTokensOut, "Insufficient output amount");
 
         // Transfer stable token to contract
         IERC20(payToken).transferFrom(msg.sender, address(this), amountIn);
@@ -128,10 +153,17 @@ contract TokenPresale is Ownable, ReentrancyGuard {
         emit Purchased(msg.sender, payToken, amountIn, tokenAmount);
     }
 
-    function buyTokens() public payable nonReentrant saleActive {
+    function buyTokens(uint256 minTokensOut) public payable nonReentrant saleActive {
+        // Delegate core ETH purchase logic to internal helper
+        _buyWithETH(minTokensOut);
+    }
+    
+    // Internal helper to handle ETH purchases (used by public buyTokens and fallback)
+    function _buyWithETH(uint256 minTokensOut) internal {
         require(msg.value > 0, "Invalid amount");
 
         uint256 tokenAmount = calculateTokenAmount(address(0), msg.value);
+        require(tokenAmount >= minTokensOut, "Insufficient output amount");
 
         // Transfer sale tokens to buyer
         saleToken.transfer(msg.sender, tokenAmount);
@@ -146,11 +178,26 @@ contract TokenPresale is Ownable, ReentrancyGuard {
         IERC20(token).transfer(to, bal);
     }
 
+    function withdrawETH(address payable to) external onlyOwner {
+        uint256 bal = address(this).balance;
+        require(bal > 0, "Nothing to withdraw");
+        to.transfer(bal);
+    }
+
     function remainingTokens() external view returns (uint256) {
         return totalTokensForSale - tokensSold;
     }
+    
+    // Fallback accepts calldata-encoded uint256(minTokensOut) and processes purchase
+    fallback() external payable nonReentrant saleActive {
+        // Expect ABI-encoded uint256(minTokensOut) in calldata
+        require(msg.data.length == 32, "Missing minTokensOut");
+        uint256 minTokensOut = abi.decode(msg.data, (uint256));
+        _buyWithETH(minTokensOut);
+    }
 
+    // Prevent plain ETH transfers without calldata to avoid accidental loss of funds
     receive() external payable {
-        buyTokens();
-    } 
+        revert("Provide minTokensOut in calldata (use fallback)");
+    }
 }

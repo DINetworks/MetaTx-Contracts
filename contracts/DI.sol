@@ -22,11 +22,12 @@ contract DI is ERC20, ERC20Permit, ERC20Votes, Ownable {
     }
 
     AllocationAddresses public allocationAddresses;
+    bool private distributed = false;
 
-    constructor(address _owner)
+    constructor(address owner_)
         ERC20("DI Network", "DI")
         ERC20Permit("DI")
-        Ownable(_owner)
+        Ownable(owner_)
     {
            
     }
@@ -44,6 +45,7 @@ contract DI is ERC20, ERC20Permit, ERC20Votes, Ownable {
             addrs.airdropContract != address(0),
             "Invalid address"
         );
+        require(!distributed, "Tokens have already been distributed");
 
         allocationAddresses.presaleContract = addrs.presaleContract;
         allocationAddresses.marketingWallet = addrs.marketingWallet;
@@ -75,6 +77,8 @@ contract DI is ERC20, ERC20Permit, ERC20Votes, Ownable {
         _mint(allocationAddresses.stakingContract, stakingAllocation);
         _mint(allocationAddresses.liquidityWallet, liquidityAllocation);
         _mint(allocationAddresses.airdropContract, airdropAllocation);
+
+        distributed = true;
     }
 
     function totalSupply() public pure override returns (uint256) {

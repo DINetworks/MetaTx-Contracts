@@ -16,7 +16,7 @@ contract TokenAirdrop is Ownable {
     event MerkleRootUpdated(bytes32 indexed newRoot);
     event AirdropWindowUpdated(uint256, uint256);
 
-    constructor(address _token, address _owner) Ownable(_owner) {
+    constructor(address _token, address owner_) Ownable(owner_) {
         require(_token != address(0), "Invalid token address");
         token = IERC20(_token);
     }

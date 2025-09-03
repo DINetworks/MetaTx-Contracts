@@ -38,10 +38,10 @@ contract GasCreditVault is Initializable, OwnableUpgradeable, UUPSUpgradeable  {
     event TokenWhitelisted(address indexed token, address priceFeed);
     event TokenRemoved(address indexed token);
     event Deposited(address indexed user, address indexed token, uint256 amount, uint256 credited);
-    event Withdrawn(address indexed user, address indexed token, uint256 amount, uint256 credited);
+    event Withdrawn(address indexed user, uint256 creditAmount, uint256 withdrawnCredits);
     event CreditsConsumed(address indexed user, uint256 usdValue, uint256 creditCost);
     event CreditTransfer(address indexed sender, address indexed receiver, uint256 creditAmount);
-    event OwnerWithdrawn(address indexed token, uint256 amount, uint256 creditedConsumed);
+    event ConsumedCreditsWithdrawn(address indexed owner, uint256 creditsWithdrawn);
     event RelayerAdded(address indexed relayer);
     event RelayerRemoved(address indexed relayer);
     event EmergencyWithdrawn(address indexed to, uint256 amount);
@@ -54,7 +54,6 @@ contract GasCreditVault is Initializable, OwnableUpgradeable, UUPSUpgradeable  {
 
     mapping(address => TokenInfo) public tokenInfo;
     mapping(address => uint256) public credits;
-    mapping(address => mapping(address => uint256)) public creditsInToken;
     
     uint256 public totalConsumedCreditsWithdrawn;
     uint256 public totalConsumedCredits;
@@ -259,33 +258,43 @@ contract GasCreditVault is Initializable, OwnableUpgradeable, UUPSUpgradeable  {
         uint256 creditedAmount = calculateCreditValue(token, amount);
 
         credits[msg.sender] += creditedAmount;
-        creditsInToken[msg.sender][token] += creditedAmount;
 
         emit Deposited(msg.sender, token, amount, creditedAmount);
     }
 
     /**
      * @dev Allows users to withdraw stablecoins using their credits
-     * @param token The stablecoin contract address to withdraw
      * @param creditAmount The amount of credits to convert to tokens
      * @notice Only works with stablecoins
      * @notice User must have sufficient credits in the specified token
      * @notice Contract must not be paused
      * @notice Vault must have sufficient token balance
      */
-    function withdraw(address token, uint256 creditAmount) external whenNotPaused onlyStablecoin(token) {
-        require(creditsInToken[msg.sender][token] >= creditAmount, "Insufficient token balance");
+    function withdraw(uint256 creditAmount) external whenNotPaused {
+        require(credits[msg.sender] >= creditAmount, "Insufficient token balance");
 
-        uint256 tokenAmount = calculateTokenValue(token, creditAmount);
-        require(IERC20(token).balanceOf(address(this)) >= tokenAmount, "Insufficient token in Vault");
+        uint256 remaining = creditAmount;
+        address[] memory tokens = whitelistedTokens.values();
+        for (uint256 i = 0; i < tokens.length && remaining > 0; ++i) {
+            address token = tokens[i];
+            TokenInfo memory info = tokenInfo[token];            
+            uint256 contractBalance = IERC20(token).balanceOf(address(this));
+            if (!info.isStablecoin || contractBalance == 0) {
+                continue; 
+            }
+
+            uint256 tokenAmount = calculateTokenValue(token, remaining);
+            uint256 deduction = tokenAmount >= contractBalance ? contractBalance : tokenAmount;
+            IERC20(token).safeTransfer(msg.sender, deduction);
+
+            remaining -= deduction;
+        }
 
         // Update credits
-        credits[msg.sender] -= creditAmount;
-        creditsInToken[msg.sender][token] -= creditAmount;
+        uint256 withdrawnCredits = creditAmount - remaining;
+        credits[msg.sender] -= withdrawnCredits;
 
-        IERC20(token).safeTransfer(msg.sender, tokenAmount);
-
-        emit Withdrawn(msg.sender, token, tokenAmount, creditAmount);
+        emit Withdrawn(msg.sender, creditAmount, withdrawnCredits);
     }
 
     // Consumption function ====================================
@@ -304,29 +313,12 @@ contract GasCreditVault is Initializable, OwnableUpgradeable, UUPSUpgradeable  {
 
         uint256 creditCost = usdValue > minimumConsume ? usdValue : minimumConsume;
 
-        require(credits[user] >= creditCost, "Insufficient credits");
+        uint256 deduction = credits[user] >= creditCost ? creditCost : credits[user];
 
-        uint256 remaining = creditCost;
+        credits[user] -= deduction;
+        totalConsumedCredits += deduction;
 
-        // Iterate over whitelisted tokens and deduct credited and deposited accordingly
-        address[] memory tokens = whitelistedTokens.values();
-        for (uint256 i = 0; i < tokens.length && remaining > 0; ++i) {
-            address token = tokens[i];
-            uint256 userCredited = creditsInToken[user][token];
-
-            if (userCredited == 0) continue;
-
-            uint256 deduction = userCredited >= remaining ? remaining : userCredited;
-
-            creditsInToken[user][token] -= deduction;
-
-            remaining -= deduction;
-        }
-
-        credits[user] -= creditCost;
-        totalConsumedCredits += creditCost;
-        
-        emit CreditsConsumed(user, usdValue, creditCost);
+        emit CreditsConsumed(user, usdValue, deduction);
     }
 
     /**
@@ -342,21 +334,6 @@ contract GasCreditVault is Initializable, OwnableUpgradeable, UUPSUpgradeable  {
         require(receiver != address(0), "Invalid receiver address");
         require(credits[sender] >= credit, 'Invalid amount');
         
-        uint256 remaining = credit;
-        address[] memory tokens = whitelistedTokens.values();
-        for (uint256 i = 0; i < tokens.length && remaining > 0; ++i) {
-            address token = tokens[i];
-            uint256 userCredited = creditsInToken[sender][token];
-
-            if (userCredited == 0) continue;
-
-            uint256 deduction = userCredited >= remaining ? remaining : userCredited;
-
-            creditsInToken[sender][token] -= deduction;
-            creditsInToken[receiver][token] += deduction;
-            remaining -= deduction;
-        }
-
         credits[receiver] += credit;
         credits[sender] -= credit;
         emit CreditTransfer(sender, receiver, credit);
@@ -368,39 +345,42 @@ contract GasCreditVault is Initializable, OwnableUpgradeable, UUPSUpgradeable  {
      * @notice Only withdraws new consumed credits since last withdrawal
      * @notice Proportionally withdraws from all token balances based on consumed credits
      */
-    function withdrawConsumedCredits() external onlyOwner {
-        require(totalConsumedCredits > totalConsumedCreditsWithdrawn, "No new credits to withdraw");
-
+    function withdrawConsumedCredits() external onlyOwner whenNotPaused {
         uint256 deltaCredits = totalConsumedCredits - totalConsumedCreditsWithdrawn;
-        totalConsumedCreditsWithdrawn = totalConsumedCredits; // Fix: Update the withdrawn amount
+        require(deltaCredits > 0, "No new credits to withdraw");
 
         address[] memory tokens = whitelistedTokens.values();
+        uint256 creditsRemaining = deltaCredits;
 
-        // Calculate and withdraw tokens corresponding to consumed credits
-        for (uint256 i = 0; i < tokens.length; ++i) {
+        for (uint256 i = 0; i < tokens.length && creditsRemaining > 0; ++i) {
             address token = tokens[i];
-
-            // Get the token balance for the contract
             uint256 contractBalance = IERC20(token).balanceOf(address(this));
             if (contractBalance == 0) continue;
 
-            // Calculate the credit value for the token balance in terms of consumed credits
+            // Calculate how many credits this token's balance is worth
             uint256 tokenValueInCredits = calculateCreditValue(token, contractBalance);
+            if (tokenValueInCredits == 0) continue; // Avoid division by zero
 
-            // Withdraw the corresponding amount of tokens based on the consumed credits
-            uint256 tokenAmount = (deltaCredits * contractBalance) / tokenValueInCredits;
+            // Determine how many credits to withdraw from this token
+            uint256 creditsToWithdraw = tokenValueInCredits > creditsRemaining ? creditsRemaining : tokenValueInCredits;
 
-            // Ensure we don't withdraw more than the available balance
-            if (tokenAmount > contractBalance) {
-                tokenAmount = contractBalance;
-            }
+            // Calculate the token amount corresponding to creditsToWithdraw
+            uint256 tokenAmount = (creditsToWithdraw * contractBalance) / tokenValueInCredits;
+            if (tokenAmount == 0) continue; // Avoid dust
 
-            // If tokenAmount is greater than zero, withdraw it to the owner
-            if (tokenAmount > 0) {
-                IERC20(token).safeTransfer(owner(), tokenAmount);
-                emit OwnerWithdrawn(token, tokenAmount, deltaCredits);
-            }
+            // Transfer tokens to owner
+            IERC20(token).transfer(msg.sender, tokenAmount);
+
+            // Update how many credits remain to be withdrawn
+            creditsRemaining -= creditsToWithdraw;
         }
+
+        // Update withdrawn credits
+        uint256 creditsWithdrawn = deltaCredits - creditsRemaining;
+        require(creditsWithdrawn > 0, "Nothing withdrawn");
+        totalConsumedCreditsWithdrawn += creditsWithdrawn;
+
+        emit ConsumedCreditsWithdrawn(msg.sender, creditsWithdrawn);
     }
 
     // Price calculation functions ================================
@@ -459,11 +439,11 @@ contract GasCreditVault is Initializable, OwnableUpgradeable, UUPSUpgradeable  {
         require(block.timestamp - updatedAt <= PRICE_FEED_TIMEOUT, "Price feed too stale");
         require(answeredInRound >= roundId, "Price feed round incomplete");
         
-        uint8 priceFeedDecimals = info.priceFeed.decimals();
+        uint8 _decimals = tokenDecimals + info.priceFeed.decimals();
         
         // Fix precision: multiply first, then divide
         // Formula: (creditAmount * 10^(tokenDecimals + priceFeedDecimals)) / (price * 10^creditDecimals)
-        uint256 numerator = convertDecimals(creditAmount, creditDecimals, creditDecimals + tokenDecimals + priceFeedDecimals);
+        uint256 numerator = convertDecimals(creditAmount, creditDecimals, _decimals);
         return numerator / uint256(price);
     }
 

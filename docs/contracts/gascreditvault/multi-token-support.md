@@ -47,7 +47,6 @@ struct TokenInfo {
 // Storage mapping
 mapping(address => TokenInfo) public tokenInfo;
 mapping(address => uint256) public credits;
-mapping(address => mapping(address => uint256)) public creditsInToken;
 
 function isTokenWhitelisted(address token) external view returns (bool);
 ```
@@ -112,7 +111,6 @@ function isRelayerWhitelisted(address relayer) external view returns (bool);
 
 ```solidity
 mapping(address => uint256) public credits;
-mapping(address => mapping(address => uint256)) public creditsInToken;
 ```
 
 ## Events

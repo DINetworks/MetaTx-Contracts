@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.19;
+pragma solidity ^0.8.20;
 
 import "@openzeppelin/contracts/token/ERC20/extensions/ERC20Votes.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
@@ -21,7 +21,7 @@ contract DIVote is Ownable {
         address[] voterList;
     }
 
-    ERC20Votes public voteToken;
+    ERC20Votes public immutable voteToken;
     uint256 public proposalCount;
 
     mapping(uint256 => Proposal) private proposals;

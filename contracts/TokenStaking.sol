@@ -52,7 +52,7 @@ contract TokenStaking is Ownable {
     event Withdrawn(address indexed user, uint256 stakeIndex, uint256 amount);
     event ClaimedReward(address indexed user, uint256 stakeIndex, uint256 reward);
 
-    constructor(address _stakingToken, address _owner) Ownable(_owner) {
+    constructor(address _stakingToken, address owner_) Ownable(owner_) {
         stakingToken = IERC20(_stakingToken);
     }
     
